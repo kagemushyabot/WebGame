@@ -97,12 +97,10 @@ function normalize(v){ const l=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])||1; retu
 
 /* Rotate local point (x,y,z) by yaw (around Y) then pitch (around X), then add ship offset */
 function rotateShipPoint(x, y, z, yaw, pitch, ox, oy, oz){
-  // yaw around Y
   const cy=Math.cos(yaw), sy=Math.sin(yaw);
   let x1 = x*cy + z*sy;
   let z1 = -x*sy + z*cy;
   let y1 = y;
-  // pitch around X
   const cp=Math.cos(pitch), sp=Math.sin(pitch);
   let y2 = y1*cp - z1*sp;
   let z2 = y1*sp + z1*cp;
@@ -172,8 +170,8 @@ window.addEventListener('mousemove', e=>{
   mousePitch = -my * 0.6;
 });
 
-/* ====================== Ship & Camera ====================== */
-let ship = { x:0, y:0, z:0, yaw:0, pitch:0, speed:0, radius:12, dead:false };
+/* ====================== Ship (fixed at screen center) & Camera ====================== */
+let ship = { x:0, y:0, z:0, yaw:0, pitch:0, speed:0, radius:14, dead:false };
 let camX=0, camY=0, camZ=0;
 let camRight=[1,0,0], camUp=[0,1,0], camForward=[0,0,-1];
 
@@ -187,10 +185,11 @@ function updateCamera(){
   let yaw = ship.yaw + mouseYaw;
   let pitch = clamp(ship.pitch + mousePitch, -1.2, 1.2);
   const f = getForward(yaw, pitch);
-  const dist = 140;
-  camX = ship.x - f[0]*dist;
-  camY = ship.y - f[1]*dist + 14;
-  camZ = ship.z - f[2]*dist;
+  const dist = 150;
+  // Camera behind ship; ship is at (0,0,0)
+  camX = -f[0]*dist;
+  camY = -f[1]*dist + 16;
+  camZ = -f[2]*dist;
   camForward = f;
   const worldUp=[0,1,0];
   camRight = normalize(cross(camForward, worldUp));
@@ -242,8 +241,9 @@ function handlePointerDown(e){
   if(e.target.tagName==='BUTTON') return;
   shoot();
 }
-container.addEventListener('touchstart', e=>{ e.preventDefault(); handlePointerDown(e); }, {passive:false});
-container.addEventListener('mousedown', handlePointerDown);
+/* Canvas tap to fire; buttons use their own click handlers so they are not blocked */
+canvas.addEventListener('touchstart', e=>{ e.preventDefault(); handlePointerDown(e); }, {passive:false});
+canvas.addEventListener('mousedown', handlePointerDown);
 
 /* Recenter / Mute */
 btnRecenter.addEventListener('click',()=>{
@@ -258,7 +258,7 @@ btnStart.addEventListener('click',startGame);
 btnRestart.addEventListener('click',resetGame);
 
 /* ====================== Game logic ====================== */
-function newShip(){ return {x:0,y:0,z:0,yaw:0,pitch:0,speed:0,radius:12,dead:false}; }
+function newShip(){ return {x:0,y:0,z:0,yaw:0,pitch:0,speed:0,radius:14,dead:false}; }
 
 function spawnAsteroid(size, ox,oy,oz, vx,vy,vz){
   let x,y,z;
@@ -309,10 +309,10 @@ function initLevel(){
   ship=newShip();
   bullets=[]; asteroids=[]; particles=[];
   invulnUntil=0;
-  const count=6+(level-1); // increased asteroid count
+  const count=6+(level-1);
   for(let i=0;i<count;i++){
     let ast; let tries=0;
-    do { ast=spawnAsteroid(3); tries++; } while(dist3(ast.x,ast.y,ast.z,0,0,0)<280 && tries<40);
+    do { ast=spawnAsteroid(3); tries++; } while(dist3(ast.x,ast.y,ast.z,0,0,0)<300 && tries<40);
     asteroids.push(ast);
   }
   audio.playLevelStart();
@@ -343,20 +343,18 @@ function resetGame(){ startGame(); }
 function shoot(){
   if(fireCooldown>0) return;
   const f=getForward(ship.yaw, ship.pitch);
-  const spd=11;
+  const spd=12;
   bullets.push({
-    x:ship.x+f[0]*ship.radius,
-    y:ship.y+f[1]*ship.radius,
-    z:ship.z+f[2]*ship.radius,
+    x:f[0]*ship.radius, y:f[1]*ship.radius, z:f[2]*ship.radius,
     vx:f[0]*spd, vy:f[1]*spd, vz:f[2]*spd,
-    life:45
+    life:50
   });
   fireCooldown=10;
   audio.playFire();
 }
 
 function updateShip(){
-  const acc=0.22, friction=0.982, maxSpeed=8;
+  const acc=0.22, friction=0.982, maxSpeed=9;
   if(thrustKeyDown || keys['KeyW'] || keys['ArrowUp']){
     ship.speed = Math.min(ship.speed+acc, maxSpeed);
     audio.playThrustStart();
@@ -364,15 +362,7 @@ function updateShip(){
     ship.speed = Math.max(ship.speed-acc*1.5, 0);
     audio.playThrustStop();
   }
-  const f=getForward(ship.yaw, ship.pitch);
-  ship.x += f[0]*ship.speed;
-  ship.y += f[1]*ship.speed;
-  ship.z += f[2]*ship.speed;
-  ship.speed *= friction;
-  const bound=520;
-  if(ship.x>bound) ship.x=-bound; if(ship.x<-bound) ship.x=bound;
-  if(ship.z>bound) ship.z=-bound; if(ship.z<-bound) ship.z=bound;
-  if(ship.y>120) ship.y=120; if(ship.y<-120) ship.y=-120;
+  // Ship position stays fixed at (0,0,0). Only speed changes (used to move environment).
 }
 
 function applyGyroToShip(){
@@ -384,53 +374,55 @@ function applyGyroToShip(){
   ship.yaw = (g/90)*1.6;
 }
 
-function updateBullets(){
-  for(let i=bullets.length-1;i>=0;i--){
-    const b=bullets[i];
-    b.x+=b.vx; b.y+=b.vy; b.z+=b.vz;
-    b.life--;
-    const bound=520;
-    if(b.x>bound) b.x=-bound; if(b.x<-bound) b.x=bound;
-    if(b.z>bound) b.z=-bound; if(b.z<-bound) b.z=bound;
-    if(b.life<=0) bullets.splice(i,1);
-  }
-}
-
-function updateAsteroids(){
-  for(let i=asteroids.length-1;i>=0;i--){
-    const a=asteroids[i];
-    a.x+=a.vx; a.y+=a.vy; a.z+=a.vz;
-    a.angle+=a.angleVel;
-    const bound=520;
-    if(a.x>bound) a.x=-bound; if(a.x<-bound) a.x=bound;
-    if(a.z>bound) a.z=-bound; if(a.z<-bound) a.z=bound;
-  }
-}
-
-function updateParticles(){
-  for(let i=particles.length-1;i>=0;i--){
-    const p=particles[i];
-    p.x+=p.vx; p.y+=p.vy; p.z+=p.vz;
-    p.life-=0.04;
-    if(p.life<=0) particles.splice(i,1);
-  }
-}
-
-function updateStars(){
+/* Move environment (asteroids, stars, bullets, particles) opposite to ship's forward direction,
+   so it looks like the ship is moving forward through space while staying at screen center. */
+function moveEnvironment(){
   const f=getForward(ship.yaw, ship.pitch);
-  const bound=900;
+  const mv = ship.speed; // environment moves backward by this amount each frame
+  const bound=560;
+  function wrapObj(o){
+    if(o.x>bound) o.x=-bound; if(o.x<-bound) o.x=bound;
+    if(o.z>bound) o.z=-bound; if(o.z<-bound) o.z=bound;
+    if(o.y>140) o.y=140; if(o.y<-140) o.y=-140;
+  }
+  for(const a of asteroids){
+    a.x -= f[0]*mv + a.vx;
+    a.y -= f[1]*mv + a.vy;
+    a.z -= f[2]*mv + a.vz;
+    a.angle+=a.angleVel;
+    wrapObj(a);
+  }
+  for(const b of bullets){
+    b.x -= f[0]*mv + b.vx;
+    b.y -= f[1]*mv + b.vy;
+    b.z -= f[2]*mv + b.vz;
+    b.life--;
+    wrapObj(b);
+    if(b.life<=0) { /* removed below */ }
+  }
+  // remove dead bullets
+  for(let i=bullets.length-1;i>=0;i--){ if(bullets[i].life<=0) bullets.splice(i,1); }
+  for(const p of particles){
+    p.x -= f[0]*mv + p.vx;
+    p.y -= f[1]*mv + p.vy;
+    p.z -= f[2]*mv + p.vz;
+    p.life-=0.04;
+  }
+  for(let i=particles.length-1;i>=0;i--){ if(particles[i].life<=0) particles.splice(i,1); }
   for(const s of stars){
-    s.x-=f[0]*ship.speed*0.6;
-    s.y-=f[1]*ship.speed*0.6;
-    s.z-=f[2]*ship.speed*0.6;
-    if(s.x<-bound) s.x+=bound*2; if(s.x>bound) s.x-=bound*2;
-    if(s.y<-bound) s.y+=bound*2; if(s.y>bound) s.y-=bound*2;
-    if(s.z<-bound) s.z+=bound*2; if(s.z>bound) s.z-=bound*2;
+    s.x -= f[0]*mv*0.6;
+    s.y -= f[1]*mv*0.6;
+    s.z -= f[2]*mv*0.6;
+    const sb=900;
+    if(s.x<-sb) s.x+=sb*2; if(s.x>sb) s.x-=sb*2;
+    if(s.y<-sb) s.y+=sb*2; if(s.y>sb) s.y-=sb*2;
+    if(s.z<-sb) s.z+=sb*2; if(s.z>sb) s.z-=sb*2;
   }
 }
 
 function checkCollisions(){
   if(!ship || ship.dead) return;
+  // ship is at (0,0,0)
   for(let bi=bullets.length-1;bi>=0;bi--){
     const b=bullets[bi];
     let hit=false;
@@ -454,7 +446,7 @@ function checkCollisions(){
   }
   if(Date.now()>=invulnUntil){
     for(const a of asteroids){
-      if(dist3(ship.x,ship.y,ship.z,a.x,a.y,a.z)<ship.radius+a.radius*0.85){
+      if(dist3(0,0,0,a.x,a.y,a.z)<ship.radius+a.radius*0.85){
         dieShip();
         return;
       }
@@ -467,8 +459,8 @@ function dieShip(){
   lives--;
   audio.playShipDie();
   audio.playThrustStop();
-  addParticle(ship.x,ship.y,ship.z,'#fff',24,7);
-  addParticle(ship.x,ship.y,ship.z,'#ff4444',16,6);
+  addParticle(0,0,0,'#fff',24,7);
+  addParticle(0,0,0,'#ff4444',16,6);
   scoreEl.textContent=score; livesEl.textContent=lives;
   if(lives<0){
     setTimeout(gameOverScreen,700);
@@ -497,32 +489,36 @@ function drawStarfield(){
   }
 }
 
-/* 3D wireframe spaceship */
+/* 3D wireframe spaceship - sharp design like reference */
 const SHIP_MODEL = [
-  {x:  0,  y:  4,  z: 28},   // 0 cockpit nose
-  {x: -5,  y:  2,  z: 20},   // 1 cockpit left
-  {x:  5,  y:  2,  z: 20},   // 2 cockpit right
-  {x:  0,  y:  7,  z: 10},   // 3 body top
-  {x:  0,  y: -7,  z: 10},   // 4 body bottom
-  {x: -22, y:  0,  z:  2},   // 5 left wing tip
-  {x:  22, y:  0,  z:  2},   // 6 right wing tip
-  {x: -10, y:  0,  z: 10},   // 7 left wing inner
-  {x:  10, y:  0,  z: 10},   // 8 right wing inner
-  {x: -6,  y:  5,  z: -12},  // 9 engine left top
-  {x: -6,  y: -5,  z: -12},  // 10 engine left bottom
-  {x:  6,  y:  5,  z: -12},  // 11 engine right top
-  {x:  6,  y: -5,  z: -12},  // 12 engine right bottom
-  {x: -6,  y:  0,  z: -24},  // 13 nozzle left
-  {x:  6,  y:  0,  z: -24}   // 14 nozzle right
+  {x:  0,  y: 14,  z: 26},   // 0 nose top
+  {x: -6,  y:  8,  z: 18},   // 1 cockpit left
+  {x:  6,  y:  8,  z: 18},   // 2 cockpit right
+  {x: -16, y:  0,  z: 12},   // 3 left wing inner
+  {x:  16, y:  0,  z: 12},   // 4 right wing inner
+  {x: -24, y: -2,  z:  8},   // 5 left wing tip
+  {x:  24, y: -2,  z:  8},   // 6 right wing tip
+  {x: -6,  y: -8,  z: 18},   // 7 body bottom left
+  {x:  6,  y: -8,  z: 18},   // 8 body bottom right
+  {x: -10, y:  6,  z: -10},  // 9 rear top left
+  {x:  10, y:  6,  z: -10},  // 10 rear top right
+  {x: -10, y: -6,  z: -10},  // 11 rear bottom left
+  {x:  10, y: -6,  z: -10},  // 12 rear bottom right
+  {x: -8,  y:  0,  z: -22},  // 13 nozzle left
+  {x:  8,  y:  0,  z: -22},  // 14 nozzle right
+  {x:  0,  y: -10, z: -28}   // 15 engine bottom
 ];
 const SHIP_EDGES = [
-  [0,1],[0,2],[1,2],           // cockpit
-  [1,3],[2,3],[1,4],[2,4],[3,4],// body
-  [5,7],[6,8],                 // wing outer->inner
-  [7,3],[8,3],[7,4],[8,4],     // wing to body
-  [3,9],[4,10],[3,11],[4,11],  // body to engines
-  [9,10],[11,12],              // engine covers
-  [9,13],[10,13],[11,14],[12,14],[13,14] // nozzles
+  [0,1],[0,2],[1,2],                    // cockpit
+  [1,3],[2,4],                          // body to wing inner
+  [3,5],[4,6],                          // wing inner to tip
+  [5,7],[6,8],                          // wing tip to body bottom
+  [3,7],[4,8],                          // wing inner to body bottom
+  [7,8],                                // body bottom bar
+  [3,9],[4,10],                         // body top to rear top
+  [7,11],[8,12],                        // body bottom to rear bottom
+  [9,10],[11,12],                       // rear bars
+  [9,13],[10,13],[11,14],[12,14],[13,14]// nozzles
 ];
 
 function drawShip(){
@@ -531,7 +527,7 @@ function drawShip(){
 
   const projected=[];
   for(const v of SHIP_MODEL){
-    const rp=rotateShipPoint(v.x, v.y, v.z, ship.yaw, ship.pitch, ship.x, ship.y, ship.z);
+    const rp=rotateShipPoint(v.x, v.y, v.z, ship.yaw, ship.pitch, 0,0,0);
     const p=project(rp.x, rp.y, rp.z);
     projected.push(p);
   }
@@ -541,17 +537,17 @@ function drawShip(){
   const thrusting = thrustKeyDown || keys['KeyW'] || keys['ArrowUp'];
   if(thrusting && ship.speed>0.3){
     const fl=16+Math.random()*8;
-    const nz=-24-fl;
-    const f1=rotateShipPoint(0, 0, nz, ship.yaw, ship.pitch, ship.x, ship.y, ship.z);
-    const f2=rotateShipPoint(-5, 0, nz+4, ship.yaw, ship.pitch, ship.x, ship.y, ship.z);
-    const f3=rotateShipPoint( 5, 0, nz+4, ship.yaw, ship.pitch, ship.x, ship.y, ship.z);
+    const nz=-22-fl;
+    const f1=rotateShipPoint(0, 0, nz, ship.yaw, ship.pitch, 0,0,0);
+    const f2=rotateShipPoint(-6, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
+    const f3=rotateShipPoint( 6, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
     const pf1=project(f1.x,f1.y,f1.z);
     const pf2=project(f2.x,f2.y,f2.z);
     const pf3=project(f3.x,f3.y,f3.z);
-    const pnz=projected[13]; const pnz2=projected[14];
+    const p13=projected[13], p14=projected[14];
     if(pf1&&pf2&&pf3){
-      const sx=(pnz?pnz.sx:ship.x + (pnz2?pnz2.sx:0))/2;
-      const sy=(pnz?pnz.sy:ship.y + (pnz2?pnz2.sy:0))/2;
+      const sx=(p13?p13.sx:0 + p14?p14.sx:0)/2;
+      const sy=(p13?p13.sy:0 + p14?p14.sy:0)/2;
       const grad=ctx.createLinearGradient(sx, sy, pf1.sx, pf1.sy);
       grad.addColorStop(0,'rgba(255,90,20,0.9)');
       grad.addColorStop(1,'rgba(255,255,255,0)');
@@ -560,17 +556,25 @@ function drawShip(){
     }
   }
 
-  // ship body
+  // ship body (wireframe)
   ctx.strokeStyle='#3c78ff';
-  ctx.lineWidth=2.6;
+  ctx.lineWidth=2.4;
   ctx.beginPath();
+  let firstEdge=true;
   for(const [i,j] of SHIP_EDGES){
     const pi=projected[i], pj=projected[j];
-    if(!pi||!pj) continue;
-    if(pi===projected[0]) ctx.moveTo(pi.sx,pi.sy);
+    if(!pi||!pj){ firstEdge=true; continue; }
+    if(firstEdge){ ctx.moveTo(pi.sx,pi.sy); firstEdge=false; }
     ctx.lineTo(pj.sx,pj.sy);
   }
   ctx.stroke();
+
+  // vertex dots (like reference image)
+  ctx.fillStyle='#3c78ff';
+  for(const p of projected){
+    if(!p) continue;
+    ctx.beginPath(); ctx.arc(p.sx,p.sy,1.8*p.scale,0,Math.PI*2); ctx.fill();
+  }
 }
 
 function drawAsteroid(a){
@@ -627,10 +631,7 @@ function loop(){
   if(fireCooldown>0) fireCooldown--;
   applyGyroToShip();
   updateShip();
-  updateBullets();
-  updateAsteroids();
-  updateParticles();
-  updateStars();
+  moveEnvironment();
   checkCollisions();
   nextLevelIfClear();
   draw();
