@@ -269,7 +269,6 @@ function newShip(){ return {x:0,y:0,z:0,yaw:0,pitch:0,speed:0,radius:12,dead:fal
 function makeSphereWire(latDivs, lonDivs, baseR){
   const verts=[];
   const edges=[];
-
   for(let j=0;j<=latDivs;j++){
     const lat=Math.PI*j/latDivs;
     const sinLat=Math.sin(lat);
@@ -284,22 +283,17 @@ function makeSphereWire(latDivs, lonDivs, baseR){
       });
     }
   }
-
   const idx=(j,i)=> j*lonDivs + i;
-
-  // longitude lines (around Y)
   for(let j=0;j<=latDivs;j++){
     for(let i=0;i<lonDivs;i++){
       edges.push([idx(j,i), idx(j,(i+1)%lonDivs)]);
     }
   }
-  // latitude lines (pole to pole)
   for(let i=0;i<lonDivs;i++){
     for(let j=0;j<latDivs;j++){
       edges.push([idx(j,i), idx(j+1,i)]);
     }
   }
-
   return {verts, edges};
 }
 
@@ -319,10 +313,8 @@ function spawnAsteroid(size, ox,oy,oz, vx,vy,vz){
   if(vx===undefined) vx=(rand(-1,1))*(0.5+size*0.25);
   if(vy===undefined) vy=rand(-0.3,0.3)*size;
   if(vz===undefined) vz=(rand(-1,1))*(0.5+size*0.25);
-
   const baseR=size*13;
   const wire=makeSphereWire(6, 10, baseR);
-
   return {
     x,y,z,
     vx,vy,vz,
@@ -536,44 +528,67 @@ function drawStarfield(){
   }
 }
 
-/* Classic wireframe spaceship */
+/* 3D Wireframe Spaceship based on reference image */
 const SHIP_MODEL = [
-  {x:  0,  y:  8,  z: 22},
-  {x: -8,  y:  4,  z: 14},
-  {x:  8,  y:  4,  z: 14},
-  {x: -8,  y: -4,  z: 14},
-  {x:  8,  y: -4,  z: 14},
-  {x:-14,  y:  0,  z:  6},
-  {x: 14,  y:  0,  z:  6},
-  {x: -8,  y:  6,  z: -8},
-  {x:  8,  y:  6,  z: -8},
-  {x: -8,  y: -6,  z: -8},
-  {x:  8,  y: -6,  z: -8},
-  {x: -7,  y:  0,  z:-20},
-  {x:  7,  y:  0,  z:-20}
-];
-const SHIP_EDGES = [
-  [0,1],[0,2],[1,3],[2,4],[3,4],
-  [1,5],[2,6],[5,3],[6,4],
-  [1,7],[2,8],[3,9],[4,10],
-  [7,8],[9,10],
-  [7,11],[8,11],[9,12],[10,12],[11,12]
+  /* Front face (z = -12) */
+  {x:  0,  y: 16,  z: -12},  // 0 nose tip
+  {x: -8,  y:  8,  z: -12},  // 1 shoulder left
+  {x:  8,  y:  8,  z: -12},  // 2 shoulder right
+  {x: -5,  y:  4,  z: -12},  // 3 window top left
+  {x:  5,  y:  4,  z: -12},  // 4 window top right
+  {x:  5,  y: -2,  z: -12},  // 5 window bottom right
+  {x: -5,  y: -2,  z: -12},  // 6 window bottom left
+  {x:-11,  y:  0,  z: -12},  // 7 body left
+  {x: 11,  y:  0,  z: -12},  // 8 body right
+  {x:-16,  y: -6,  z: -12},  // 9 fin left tip
+  {x: 16,  y: -6,  z: -12},  // 10 fin right tip
+  {x:-12,  y:-10,  z: -12},  // 11 fin left bottom
+  {x: 12,  y:-10,  z: -12},  // 12 fin right bottom
+  {x: -6,  y:-13,  z: -12},  // 13 bottom left
+  {x:  6,  y:-13,  z: -12},  // 14 bottom right
+  /* Back face (z = +12) */
+  {x:  0,  y: 16,  z:  12},  // 15 nose back
+  {x: -8,  y:  8,  z:  12},  // 16 shoulder left back
+  {x:  8,  y:  8,  z:  12},  // 17 shoulder right back
+  {x:-11,  y:  0,  z:  12},  // 18 body left back
+  {x: 11,  y:  0,  z:  12},  // 19 body right back
+  {x:-16,  y: -6,  z:  12},  // 20 fin left tip back
+  {x: 16,  y: -6,  z:  12},  // 21 fin right tip back
+  {x:-12,  y:-10,  z:  12},  // 22 fin left bottom back
+  {x: 12,  y:-10,  z:  12},  // 23 fin right bottom back
+  {x: -6,  y:-13,  z:  12},  // 24 bottom left back
+  {x:  6,  y:-13,  z:  12},  // 25 bottom right back
 ];
 
-function drawWireframe(model, edges, yaw, pitch, cx, cy, cz, color='#3c78ff', lineWidth=2.4, dotRadius=1.8){
+const SHIP_EDGES = [
+  /* Front body outline */
+  [0,1],[0,2],[1,7],[2,8],[7,9],[8,10],[9,11],[10,12],[11,13],[12,14],[13,14],
+  /* Back body outline */
+  [15,16],[15,17],[16,18],[17,19],[18,20],[19,21],[20,22],[21,23],[22,24],[23,25],[24,25],
+  /* Front to back connections */
+  [0,15],[1,16],[2,17],[7,18],[8,19],[9,20],[10,21],[11,22],[12,23],[13,24],[14,25],
+  /* Window on front face */
+  [3,4],[4,5],[5,6],[6,3]
+];
+
+function drawShip(){
+  if(!ship || ship.dead) return;
+  if(Date.now()<invulnUntil && Math.floor(Date.now()/80)%2===0) return;
+
   const projected=[];
-  for(const v of model){
-    const rp=rotatePoint(v.x,v.y,v.z,yaw,pitch,cx,cy,cz);
+  for(const v of SHIP_MODEL){
+    const rp=rotatePoint(v.x,v.y,v.z,ship.yaw,ship.pitch,0,0,0);
     const p=project(rp.x,rp.y,rp.z);
     projected.push(p);
   }
   if(projected.every(p=>!p)) return;
 
-  ctx.strokeStyle=color;
-  ctx.lineWidth=lineWidth;
+  /* Wireframe body */
+  ctx.strokeStyle='#3c78ff';
+  ctx.lineWidth=2.4;
   ctx.beginPath();
   let firstEdge=true;
-  for(const [i,j] of edges){
+  for(const [i,j] of SHIP_EDGES){
     const pi=projected[i], pj=projected[j];
     if(!pi||!pj){ firstEdge=true; continue; }
     if(firstEdge){ ctx.moveTo(pi.sx,pi.sy); firstEdge=false; }
@@ -581,28 +596,21 @@ function drawWireframe(model, edges, yaw, pitch, cx, cy, cz, color='#3c78ff', li
   }
   ctx.stroke();
 
-  ctx.fillStyle=color;
+  /* Vertex dots */
+  ctx.fillStyle='#3c78ff';
   for(const p of projected){
     if(!p) continue;
-    ctx.beginPath(); ctx.arc(p.sx,p.sy,dotRadius*p.scale,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(p.sx,p.sy,1.8*p.scale,0,Math.PI*2); ctx.fill();
   }
-  return projected;
-}
 
-function drawShip(){
-  if(!ship || ship.dead) return;
-  if(Date.now()<invulnUntil && Math.floor(Date.now()/80)%2===0) return;
-
-  drawWireframe(SHIP_MODEL, SHIP_EDGES, ship.yaw, ship.pitch, 0,0,0, '#3c78ff', 2.4, 1.8);
-
-  // thrust flame
+  /* Thrust flame from bottom nozzles */
   const thrusting = thrustKeyDown || keys['KeyW'] || keys['ArrowUp'];
   if(thrusting && ship.speed>0.3){
     const fl=16+Math.random()*8;
-    const nz=-20-fl;
-    const f1=rotatePoint(0,0,nz,ship.yaw,ship.pitch,0,0,0);
-    const f2=rotatePoint(-5,0,nz+4,ship.yaw,ship.pitch,0,0,0);
-    const f3=rotatePoint(5,0,nz+4,ship.yaw,ship.pitch,0,0,0);
+    const nz=-13-fl;
+    const f1=rotatePoint(0, 0, nz, ship.yaw, ship.pitch, 0,0,0);
+    const f2=rotatePoint(-5, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
+    const f3=rotatePoint( 5, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
     const pf1=project(f1.x,f1.y,f1.z);
     const pf2=project(f2.x,f2.y,f2.z);
     const pf3=project(f3.x,f3.y,f3.z);
@@ -624,7 +632,6 @@ function drawAsteroid(a){
     projected.push(p);
   }
   if(projected.every(p=>!p)) return;
-
   ctx.strokeStyle='#d8d8f0';
   ctx.lineWidth=2;
   ctx.beginPath();
@@ -636,7 +643,6 @@ function drawAsteroid(a){
     ctx.lineTo(pj.sx,pj.sy);
   }
   ctx.stroke();
-
   ctx.fillStyle='#d8d8f0';
   for(const p of projected){
     if(!p) continue;
