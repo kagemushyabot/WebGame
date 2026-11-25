@@ -6,12 +6,12 @@
 <title>ASTEROIDS 3D</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  html, body { width: 100%; height: 100%; overflow: hidden; background: #04040a; color: #fff; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: none; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #05050a; color: #fff; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: none; }
   body { height: 100dvh; display: flex; align-items: center; justify-content: center; }
   #game-container { position: relative; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; overflow: hidden; }
   canvas#game { display: block; width: 100%; height: 100%; }
 
-  /* UI - scalable with vw/vh/clamp */
+  /* Scalable UI */
   #ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; flex-direction: column; }
   #hud { pointer-events: auto; position: absolute; top: 3vh; left: 3vw; right: 3vw; display: flex; justify-content: space-between; font-size: clamp(14px, 3.5vw, 18px); color: #e8e8f0; text-shadow: 0 0 6px rgba(60,120,255,0.6); letter-spacing: 2px; z-index: 15; }
   #hud .stat { margin: 0 14px; }
@@ -88,22 +88,21 @@ class AudioSys {
 }
 const audio=new AudioSys();
 
-/* ====================== 3D Math helpers ====================== */
+/* ====================== 3D Math ====================== */
 function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
 function rand(min,max){ return Math.random()*(max-min)+min; }
 function dist3(x1,y1,z1,x2,y2,z2){ return Math.sqrt((x2-x1)**2+(y2-y1)**2+(z2-z1)**2); }
 function cross(a,b){ return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]]; }
 function normalize(v){ const l=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2])||1; return [v[0]/l,v[1]/l,v[2]/l]; }
 
-/* Rotate local point (x,y,z) by yaw (around Y) then pitch (around X), then add ship offset */
-function rotateShipPoint(x, y, z, yaw, pitch, ox, oy, oz){
+function rotatePoint(x,y,z,yaw,pitch,ox,oy,oz){
   const cy=Math.cos(yaw), sy=Math.sin(yaw);
-  let x1 = x*cy + z*sy;
-  let z1 = -x*sy + z*cy;
-  let y1 = y;
+  let x1=x*cy + z*sy;
+  let z1=-x*sy + z*cy;
+  let y1=y;
   const cp=Math.cos(pitch), sp=Math.sin(pitch);
-  let y2 = y1*cp - z1*sp;
-  let z2 = y1*sp + z1*cp;
+  let y2=y1*cp - z1*sp;
+  let z2=y1*sp + z1*cp;
   return {x:x1+ox, y:y2+oy, z:z2+oz};
 }
 
@@ -170,12 +169,12 @@ window.addEventListener('mousemove', e=>{
   mousePitch = -my * 0.6;
 });
 
-/* ====================== Ship (fixed at screen center) & Camera ====================== */
-let ship = { x:0, y:0, z:0, yaw:0, pitch:0, speed:0, radius:14, dead:false };
+/* ====================== Ship fixed at screen center + Camera ====================== */
+let ship = { x:0, y:0, z:0, yaw:0, pitch:0, speed:0, radius:12, dead:false };
 let camX=0, camY=0, camZ=0;
 let camRight=[1,0,0], camUp=[0,1,0], camForward=[0,0,-1];
 
-function getForward(yaw, pitch){
+function getForward(yaw,pitch){
   const cy=Math.cos(yaw), sy=Math.sin(yaw);
   const cp=Math.cos(pitch), sp=Math.sin(pitch);
   return [sy*cp, -sp, -cy*cp];
@@ -184,11 +183,10 @@ function getForward(yaw, pitch){
 function updateCamera(){
   let yaw = ship.yaw + mouseYaw;
   let pitch = clamp(ship.pitch + mousePitch, -1.2, 1.2);
-  const f = getForward(yaw, pitch);
+  const f = getForward(yaw,pitch);
   const dist = 150;
-  // Camera behind ship; ship is at (0,0,0)
   camX = -f[0]*dist;
-  camY = -f[1]*dist + 16;
+  camY = -f[1]*dist + 18;
   camZ = -f[2]*dist;
   camForward = f;
   const worldUp=[0,1,0];
@@ -222,30 +220,24 @@ function keydown(e){
   keys[e.code]=true;
   if(state==='START' && (e.code==='Enter'||e.code==='Space')){ startGame(); return; }
   if(state==='GAMEOVER' && e.code==='Enter'){ resetGame(); return; }
-  switch(e.code){
-    case 'KeyW': case 'ArrowUp': thrustKeyDown=true; break;
-  }
+  if(e.code==='KeyW'||e.code==='ArrowUp') thrustKeyDown=true;
 }
 function keyup(e){
   keys[e.code]=false;
-  switch(e.code){
-    case 'KeyW': case 'ArrowUp': thrustKeyDown=false; break;
-  }
+  if(e.code==='KeyW'||e.code==='ArrowUp') thrustKeyDown=false;
 }
 window.addEventListener('keydown',keydown);
 window.addEventListener('keyup',keyup);
 
-/* Tap to fire on canvas area */
+/* Tap on canvas fires; UI buttons use their own handlers */
 function handlePointerDown(e){
   if(state!=='PLAYING') return;
   if(e.target.tagName==='BUTTON') return;
   shoot();
 }
-/* Canvas tap to fire; buttons use their own click handlers so they are not blocked */
 canvas.addEventListener('touchstart', e=>{ e.preventDefault(); handlePointerDown(e); }, {passive:false});
 canvas.addEventListener('mousedown', handlePointerDown);
 
-/* Recenter / Mute */
 btnRecenter.addEventListener('click',()=>{
   if(gyroActive){ baseBeta=beta; baseGamma=gamma; baselineCaptured=true; }
   mouseYaw=0; mousePitch=0;
@@ -258,7 +250,7 @@ btnStart.addEventListener('click',startGame);
 btnRestart.addEventListener('click',resetGame);
 
 /* ====================== Game logic ====================== */
-function newShip(){ return {x:0,y:0,z:0,yaw:0,pitch:0,speed:0,radius:14,dead:false}; }
+function newShip(){ return {x:0,y:0,z:0,yaw:0,pitch:0,speed:0,radius:12,dead:false}; }
 
 function spawnAsteroid(size, ox,oy,oz, vx,vy,vz){
   let x,y,z;
@@ -362,7 +354,7 @@ function updateShip(){
     ship.speed = Math.max(ship.speed-acc*1.5, 0);
     audio.playThrustStop();
   }
-  // Ship position stays fixed at (0,0,0). Only speed changes (used to move environment).
+  /* Ship position fixed at (0,0,0). speed moves environment. */
 }
 
 function applyGyroToShip(){
@@ -374,11 +366,10 @@ function applyGyroToShip(){
   ship.yaw = (g/90)*1.6;
 }
 
-/* Move environment (asteroids, stars, bullets, particles) opposite to ship's forward direction,
-   so it looks like the ship is moving forward through space while staying at screen center. */
+/* Move environment backward so ship looks like it moves forward through 3D space */
 function moveEnvironment(){
   const f=getForward(ship.yaw, ship.pitch);
-  const mv = ship.speed; // environment moves backward by this amount each frame
+  const mv = ship.speed;
   const bound=560;
   function wrapObj(o){
     if(o.x>bound) o.x=-bound; if(o.x<-bound) o.x=bound;
@@ -392,16 +383,15 @@ function moveEnvironment(){
     a.angle+=a.angleVel;
     wrapObj(a);
   }
-  for(const b of bullets){
+  for(let i=bullets.length-1;i>=0;i--){
+    const b=bullets[i];
     b.x -= f[0]*mv + b.vx;
     b.y -= f[1]*mv + b.vy;
     b.z -= f[2]*mv + b.vz;
     b.life--;
     wrapObj(b);
-    if(b.life<=0) { /* removed below */ }
+    if(b.life<=0) bullets.splice(i,1);
   }
-  // remove dead bullets
-  for(let i=bullets.length-1;i>=0;i--){ if(bullets[i].life<=0) bullets.splice(i,1); }
   for(const p of particles){
     p.x -= f[0]*mv + p.vx;
     p.y -= f[1]*mv + p.vy;
@@ -422,7 +412,6 @@ function moveEnvironment(){
 
 function checkCollisions(){
   if(!ship || ship.dead) return;
-  // ship is at (0,0,0)
   for(let bi=bullets.length-1;bi>=0;bi--){
     const b=bullets[bi];
     let hit=false;
@@ -489,36 +478,28 @@ function drawStarfield(){
   }
 }
 
-/* 3D wireframe spaceship - sharp design like reference */
+/* Classic wireframe spaceship */
 const SHIP_MODEL = [
-  {x:  0,  y: 14,  z: 26},   // 0 nose top
-  {x: -6,  y:  8,  z: 18},   // 1 cockpit left
-  {x:  6,  y:  8,  z: 18},   // 2 cockpit right
-  {x: -16, y:  0,  z: 12},   // 3 left wing inner
-  {x:  16, y:  0,  z: 12},   // 4 right wing inner
-  {x: -24, y: -2,  z:  8},   // 5 left wing tip
-  {x:  24, y: -2,  z:  8},   // 6 right wing tip
-  {x: -6,  y: -8,  z: 18},   // 7 body bottom left
-  {x:  6,  y: -8,  z: 18},   // 8 body bottom right
-  {x: -10, y:  6,  z: -10},  // 9 rear top left
-  {x:  10, y:  6,  z: -10},  // 10 rear top right
-  {x: -10, y: -6,  z: -10},  // 11 rear bottom left
-  {x:  10, y: -6,  z: -10},  // 12 rear bottom right
-  {x: -8,  y:  0,  z: -22},  // 13 nozzle left
-  {x:  8,  y:  0,  z: -22},  // 14 nozzle right
-  {x:  0,  y: -10, z: -28}   // 15 engine bottom
+  {x:  0,  y:  8,  z: 22},
+  {x: -8,  y:  4,  z: 14},
+  {x:  8,  y:  4,  z: 14},
+  {x: -8,  y: -4,  z: 14},
+  {x:  8,  y: -4,  z: 14},
+  {x:-14,  y:  0,  z:  6},
+  {x: 14,  y:  0,  z:  6},
+  {x: -8,  y:  6,  z: -8},
+  {x:  8,  y:  6,  z: -8},
+  {x: -8,  y: -6,  z: -8},
+  {x:  8,  y: -6,  z: -8},
+  {x: -7,  y:  0,  z:-20},
+  {x:  7,  y:  0,  z:-20}
 ];
 const SHIP_EDGES = [
-  [0,1],[0,2],[1,2],                    // cockpit
-  [1,3],[2,4],                          // body to wing inner
-  [3,5],[4,6],                          // wing inner to tip
-  [5,7],[6,8],                          // wing tip to body bottom
-  [3,7],[4,8],                          // wing inner to body bottom
-  [7,8],                                // body bottom bar
-  [3,9],[4,10],                         // body top to rear top
-  [7,11],[8,12],                        // body bottom to rear bottom
-  [9,10],[11,12],                       // rear bars
-  [9,13],[10,13],[11,14],[12,14],[13,14]// nozzles
+  [0,1],[0,2],[1,3],[2,4],[3,4],
+  [1,5],[2,6],[5,3],[6,4],
+  [1,7],[2,8],[3,9],[4,10],
+  [7,8],[9,10],
+  [7,11],[8,11],[9,12],[10,12],[11,12]
 ];
 
 function drawShip(){
@@ -527,28 +508,28 @@ function drawShip(){
 
   const projected=[];
   for(const v of SHIP_MODEL){
-    const rp=rotateShipPoint(v.x, v.y, v.z, ship.yaw, ship.pitch, 0,0,0);
-    const p=project(rp.x, rp.y, rp.z);
+    const rp=rotatePoint(v.x,v.y,v.z,ship.yaw,ship.pitch,0,0,0);
+    const p=project(rp.x,rp.y,rp.z);
     projected.push(p);
   }
   if(projected.every(p=>!p)) return;
 
-  // thrust flame (from two nozzles)
+  // thrust flame
   const thrusting = thrustKeyDown || keys['KeyW'] || keys['ArrowUp'];
   if(thrusting && ship.speed>0.3){
     const fl=16+Math.random()*8;
-    const nz=-22-fl;
-    const f1=rotateShipPoint(0, 0, nz, ship.yaw, ship.pitch, 0,0,0);
-    const f2=rotateShipPoint(-6, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
-    const f3=rotateShipPoint( 6, 0, nz+4, ship.yaw, ship.pitch, 0,0,0);
+    const nz=-20-fl;
+    const f1=rotatePoint(0,0,nz,ship.yaw,ship.pitch,0,0,0);
+    const f2=rotatePoint(-5,0,nz+4,ship.yaw,ship.pitch,0,0,0);
+    const f3=rotatePoint(5,0,nz+4,ship.yaw,ship.pitch,0,0,0);
     const pf1=project(f1.x,f1.y,f1.z);
     const pf2=project(f2.x,f2.y,f2.z);
     const pf3=project(f3.x,f3.y,f3.z);
-    const p13=projected[13], p14=projected[14];
+    const p11=projected[11], p12=projected[12];
     if(pf1&&pf2&&pf3){
-      const sx=(p13?p13.sx:0 + p14?p14.sx:0)/2;
-      const sy=(p13?p13.sy:0 + p14?p14.sy:0)/2;
-      const grad=ctx.createLinearGradient(sx, sy, pf1.sx, pf1.sy);
+      const sx=(p11?p11.sx:0 + p12?p12.sx:0)/2;
+      const sy=(p11?p11.sy:0 + p12?p12.sy:0)/2;
+      const grad=ctx.createLinearGradient(sx,sy,pf1.sx,pf1.sy);
       grad.addColorStop(0,'rgba(255,90,20,0.9)');
       grad.addColorStop(1,'rgba(255,255,255,0)');
       ctx.fillStyle=grad;
@@ -556,7 +537,7 @@ function drawShip(){
     }
   }
 
-  // ship body (wireframe)
+  // wireframe body
   ctx.strokeStyle='#3c78ff';
   ctx.lineWidth=2.4;
   ctx.beginPath();
@@ -569,7 +550,7 @@ function drawShip(){
   }
   ctx.stroke();
 
-  // vertex dots (like reference image)
+  // vertex dots
   ctx.fillStyle='#3c78ff';
   for(const p of projected){
     if(!p) continue;
