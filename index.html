@@ -392,9 +392,10 @@ function shoot(){
   if(fireCooldown>0) return;
   const f=getForward(ship.yaw, ship.pitch);
   const spd=12;
+  // カメラ方向（前方）ではなく、真逆方向（後方）に発射
   bullets.push({
-    x:f[0]*ship.radius, y:f[1]*ship.radius, z:f[2]*ship.radius,
-    vx:f[0]*spd, vy:f[1]*spd, vz:f[2]*spd,
+    x:-f[0]*ship.radius, y:-f[1]*ship.radius, z:-f[2]*ship.radius,
+    vx:-f[0]*spd, vy:-f[1]*spd, vz:-f[2]*spd,
     life:50
   });
   fireCooldown=10;
