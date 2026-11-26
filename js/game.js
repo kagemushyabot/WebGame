@@ -68,7 +68,13 @@ function layoutCockpitControls() {
   const rect = canvas.getBoundingClientRect();
   const w = rect.width;
   const h = rect.height;
-  const L = cockpitControlLayout(w, h);
+  const L = cockpitControlLayout(w, h, {
+    score,
+    level,
+    lives,
+    timeLeft: getLevelTimeLeftSec(),
+    muted: audio.muted
+  });
   const apply = (el, box) => {
     if (!el || !box) return;
     el.style.left = `${box.left}px`;
