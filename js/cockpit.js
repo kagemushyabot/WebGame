@@ -3,7 +3,7 @@
  */
 
 /** Console band = bottom ~1/5 of the screen. */
-const CONSOLE_TOP = 0.8;
+export const CONSOLE_TOP = 0.8;
 const VIEW_BOTTOM = 0.798;
 const MAIN_TOP = 0.118;
 const MAIN_LEFT = 0.055;
@@ -133,16 +133,6 @@ function strokeSegs(ctx, w, h, segs, stroke, lw) {
   }
 }
 
-function drawHudScreen(ctx, x, y, ww, hh) {
-  ctx.strokeStyle = 'rgba(75, 230, 130, 0.55)';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, ww, hh);
-  const cx = x + ww / 2, cy = y + hh / 2;
-  ctx.beginPath();
-  ctx.arc(cx, cy, Math.min(ww, hh) * 0.2, 0, Math.PI * 2);
-  ctx.stroke();
-}
-
 /** Pillar / side frame blocking the view (cool gray-blue). */
 const COLOR_FRAME_BLOCK = '#1c2433';
 /** Overhead strip above the canopy. */
@@ -178,9 +168,4 @@ export function drawCockpitOverlay(ctx, w, h) {
   strokeSegs(ctx, w, h, WIRE.glass, 'rgba(160, 205, 245, 0.78)', 1.65);
   strokeSegs(ctx, w, h, WIRE.structure, 'rgba(118, 145, 188, 0.58)', 1.3);
 
-  const deskY = h * (ct + 0.035);
-  const deskH = h * 0.075;
-  drawHudScreen(ctx, w * 0.07, deskY, w * 0.13, deskH);
-  drawHudScreen(ctx, w * 0.8, deskY, w * 0.13, deskH);
-  drawHudScreen(ctx, w * 0.42, deskY + h * 0.005, w * 0.16, deskH + h * 0.01);
 }

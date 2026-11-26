@@ -9,6 +9,7 @@ import {
 } from './entities.js';
 import { WORLD } from './world.js';
 import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
+import { drawCockpitInstruments, cockpitControlLayout } from './cockpitUi.js';
 import {
   isPortraitBlocked,
   isGameplayOrientationBlocked,
@@ -19,6 +20,9 @@ import {
 } from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
+const LEVEL_DURATION_MS = 60 * 1000;
+const ASTEROID_TIME_PENALTY = 75;
+let levelDeadline = 0;
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d', { alpha: false });
@@ -56,7 +60,25 @@ function resize() {
   cxCanvas = width / (dpr * 2);
   cyCanvas = height / (dpr * 2);
 }
-window.addEventListener('resize', resize);
+function layoutCockpitControls() {
+  if (!canvas || state !== 'PLAYING') return;
+  const rect = canvas.getBoundingClientRect();
+  const w = rect.width;
+  const h = rect.height;
+  const L = cockpitControlLayout(w, h);
+  const apply = (el, box) => {
+    if (!el || !box) return;
+    el.style.left = `${box.left}px`;
+    el.style.top = `${box.top}px`;
+    el.style.width = `${box.width}px`;
+    el.style.height = `${box.height}px`;
+    el.style.right = 'auto';
+  };
+  apply(btnRecenter, L.recenter);
+  apply(btnMute, L.audio);
+  apply(btnQuit, L.quit);
+}
+window.addEventListener('resize', () => { resize(); layoutCockpitControls(); });
 resize();
 
 let beta = 0, gamma = 0;
@@ -260,6 +282,7 @@ function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
   setPlaySessionActive(false);
+  document.documentElement.classList.remove('cockpit-ui');
   exitGameFullscreen();
   audio.playThrustStop();
   pauseHint?.classList.remove('hidden');
@@ -308,6 +331,44 @@ function showLevelFlash() {
   }, 1200);
 }
 
+function getLevelTimeLeftSec() {
+  return Math.max(0, (levelDeadline - performance.now()) / 1000);
+}
+
+function computeThreatLevel() {
+  let minD = Infinity;
+  for (const a of asteroids) {
+    const d = dist3(0, 0, 0, a.x, a.y, a.z) - asteroidRadius(a);
+    minD = Math.min(minD, d);
+  }
+  if (!Number.isFinite(minD)) return 0;
+  if (minD > 165) return 0;
+  if (minD > 100) return 1;
+  return 2;
+}
+
+function finishLevelByTimer() {
+  if (state !== 'PLAYING') return;
+  const remaining = asteroids.length;
+  if (remaining > 0) {
+    const penalty = remaining * ASTEROID_TIME_PENALTY;
+    score = Math.max(0, score - penalty);
+    if (levelFlash) {
+      levelFlash.textContent = `TIME UP — −${penalty} (${remaining} left)`;
+      levelFlash.classList.remove('hidden');
+      levelFlash.classList.add('show');
+      setTimeout(() => {
+        levelFlash.classList.remove('show');
+        setTimeout(() => levelFlash.classList.add('hidden'), 400);
+      }, 1800);
+    }
+  }
+  scoreEl.textContent = score;
+  levelDeadline = performance.now() + 1e9;
+  level++;
+  initLevel(true);
+}
+
 function initLevel(clearFlash = false) {
   ship = newShip();
   bullets = [];
@@ -315,6 +376,7 @@ function initLevel(clearFlash = false) {
   asteroids = [];
   particles = [];
   invulnUntil = 0;
+  levelDeadline = performance.now() + LEVEL_DURATION_MS;
   const diff = getDiff();
   const count = diff.baseCount + (level - 1);
   for (let i = 0; i < count; i++) {
@@ -359,12 +421,15 @@ function startGame() {
   pauseHint?.classList.add('hidden');
   initLevel(false);
   frame = 0;
+  document.documentElement.classList.add('cockpit-ui');
+  layoutCockpitControls();
   loop();
 }
 
 function gameOverScreen() {
   state = 'GAMEOVER';
   setPlaySessionActive(false);
+  document.documentElement.classList.remove('cockpit-ui');
   saveHiScore();
   goScoreEl.textContent = score;
   goHiScoreEl.textContent = Math.max(score, getHiScore());
@@ -1046,6 +1111,19 @@ function draw() {
     drawWarpEffect();
     ctx.restore();
     drawCockpitOverlay(ctx, w, h);
+    drawCockpitInstruments(ctx, w, h, {
+      score,
+      level,
+      lives,
+      timeLeft: getLevelTimeLeftSec(),
+      asteroidCount: asteroids.length,
+      asteroids,
+      shipYaw: ship.yaw,
+      threat: computeThreatLevel(),
+      frame,
+      muted: audio.muted,
+      radarRange: WORLD.bound * 0.92
+    });
     drawViewportHud();
   } else {
     drawStarfield();
@@ -1071,7 +1149,8 @@ function loop() {
   }
   moveEnvironment();
   checkCollisions();
-  nextLevelIfClear();
+  if (getLevelTimeLeftSec() <= 0) finishLevelByTimer();
+  else nextLevelIfClear();
   draw();
   requestAnimationFrame(loop);
 }

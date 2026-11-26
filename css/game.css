@@ -163,6 +163,41 @@ button.start:active { transform: scale(0.95); background: #2a5fcc; }
 
 .hidden { display: none !important; }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+html.cockpit-ui #hud { display: none !important; }
+html.cockpit-ui .topbar {
+  top: 0;
+  left: 0;
+  right: auto;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+html.cockpit-ui .icon-btn.cockpit-hit {
+  position: absolute;
+  opacity: 0.08;
+  border-color: rgba(120, 220, 160, 0.35);
+  background: rgba(10, 30, 20, 0.35);
+  pointer-events: auto;
+  font-size: clamp(14px, 3.5vw, 18px);
+  border-radius: 8px;
+}
+html.cockpit-ui .icon-btn.cockpit-hit:active {
+  opacity: 0.35;
+  background: rgba(40, 100, 70, 0.55);
+}
+
 .orientation-lock {
   position: fixed;
   inset: 0;

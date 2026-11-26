@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
@@ -12,8 +12,8 @@
 <div id="orientationLock" class="orientation-lock hidden" role="alert" aria-live="polite">
   <div class="orientation-lock__card">
     <p class="orientation-lock__icon" aria-hidden="true">↻</p>
-    <h2>横向きでプレイしてください</h2>
-    <p>このゲームはランドスケープ（横画面）専用です。<br>端末を回転してください。</p>
+    <h2>Please rotate to landscape</h2>
+    <p>This game is landscape-only.<br>Rotate your device to continue.</p>
   </div>
 </div>
 
@@ -21,38 +21,39 @@
   <canvas id="game"></canvas>
 
   <div id="ui">
-    <div id="hud">
+    <div id="hud" class="sr-only" aria-hidden="true">
       <div class="stat">SCORE<b id="score">0</b></div>
       <div class="stat">LEVEL<b id="level">1</b></div>
       <div class="stat">LIVES<b id="lives">3</b></div>
     </div>
     <div class="topbar">
-      <button class="icon-btn" id="btnRecenter" title="照準リセット" aria-label="照準リセット">↻</button>
-      <button class="icon-btn" id="btnMute" title="ミュート" aria-label="ミュート">🔊</button>
-      <button class="icon-btn" id="btnQuit" title="終了 (Esc)" aria-label="終了">✕</button>
+      <button type="button" class="icon-btn cockpit-hit" id="btnRecenter" title="Reset aim" aria-label="Reset aim">↻</button>
+      <button type="button" class="icon-btn cockpit-hit" id="btnMute" title="Toggle mute" aria-label="Toggle mute">🔊</button>
+      <button type="button" class="icon-btn cockpit-hit" id="btnQuit" title="Quit (Esc)" aria-label="Quit">✕</button>
     </div>
 
-    <button type="button" class="touch-pad touch-pad--look" id="padLook" aria-label="ドラッグで向き・タップでワープ">
+    <button type="button" class="touch-pad touch-pad--look" id="padLook" aria-label="Drag to look, tap to warp">
       <span class="touch-pad__ring"></span>
       <span class="touch-pad__label">LOOK</span>
       <span class="touch-pad__hint">tap warp</span>
     </button>
 
-    <button type="button" class="touch-pad touch-pad--fire" id="padFire" aria-label="発射">
+    <button type="button" class="touch-pad touch-pad--fire" id="padFire" aria-label="Fire">
       <span class="touch-pad__ring"></span>
       <span class="touch-pad__label">FIRE</span>
     </button>
 
     <div id="levelFlash" class="level-flash hidden" aria-live="polite"></div>
-    <div id="pauseHint" class="pause-hint hidden">PAUSED — Esc で終了</div>
+    <div id="pauseHint" class="pause-hint hidden">PAUSED — press Esc to quit</div>
   </div>
 
   <div id="startScreen" class="panel open">
     <div class="card">
       <h1>ASTEROIDS 3D</h1>
-      <p>コックピットから宇宙を見渡す<br>左下ドラッグで回転・同位置タップでワープ</p>
-      <div class="hint">右下タップで発射 · Esc / ✕ で終了 · 🔇 ミュート</div>
-      <div class="hint">橙=連鎖爆発 · 水色=弾む · 桃=風船 · 紫=磁力 · 白青=彗星</div>
+      <p>Fly from the cockpit<br>Drag lower-left to aim · tap there to warp</p>
+      <div class="hint">Tap lower-right to fire · Esc / ✕ to quit · 🔇 mute</div>
+      <div class="hint">Orange=chain · Cyan=bounce · Pink=balloon · Purple=magnet · Pale=comet</div>
+      <div class="hint">Each level: 60s timer — leftover asteroids reduce your score</div>
       <div class="difficulty">
         <label><input type="radio" name="diff" value="easy"> Easy</label>
         <label><input type="radio" name="diff" value="normal" checked> Normal</label>
