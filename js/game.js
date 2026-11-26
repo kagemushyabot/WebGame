@@ -925,14 +925,26 @@ function drawWireModel3D(projected, edges, rgb) {
 
 function drawViewportHud() {
   const x = cxCanvas, y = cyCanvas;
-  ctx.strokeStyle = 'rgba(140,175,220,0.22)';
-  ctx.lineWidth = 1;
+  const viewW = width / dpr;
+  const viewH = height / dpr;
+  const scale = Math.min(viewW, viewH);
+  const gap = scale * 0.007;
+  const arm = scale * 0.032;
+  const r = scale * 0.013;
+  const lw = Math.max(2.2, scale * 0.0026);
+  ctx.strokeStyle = 'rgba(195, 225, 255, 0.82)';
+  ctx.lineWidth = lw;
+  ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.arc(x, y, 10, 0, Math.PI * 2);
-  ctx.moveTo(x - 14, y); ctx.lineTo(x - 6, y);
-  ctx.moveTo(x + 6, y); ctx.lineTo(x + 14, y);
-  ctx.moveTo(x, y - 14); ctx.lineTo(x, y - 6);
-  ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 14);
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.moveTo(x - arm, y);
+  ctx.lineTo(x - gap, y);
+  ctx.moveTo(x + gap, y);
+  ctx.lineTo(x + arm, y);
+  ctx.moveTo(x, y - arm);
+  ctx.lineTo(x, y - gap);
+  ctx.moveTo(x, y + gap);
+  ctx.lineTo(x, y + arm);
   ctx.stroke();
 }
 
