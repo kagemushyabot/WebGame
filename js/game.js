@@ -11,6 +11,12 @@ import { WORLD } from './world.js';
 import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
 import { drawCockpitInstruments, cockpitControlLayout } from './cockpitUi.js';
 import {
+  getActiveSkin,
+  seasonalAsteroidTint,
+  santaActiveForSkin,
+  spawnSantaSleigh
+} from './skins.js';
+import {
   isPortraitBlocked,
   isGameplayOrientationBlocked,
   setupOrientationGate,
@@ -184,6 +190,9 @@ let state = 'START';
 let score = 0, lives = 3, level = 1, scoreForLife = 10000;
 let difficulty = 'normal';
 let bullets = [], enemyBullets = [], asteroids = [], ufos = [], particles = [], stars = [];
+/** Christmas-only decorative Santa sleigh (null when inactive). */
+let santa = null;
+const SANTA_SHIELD_MS = 480;
 let keys = {};
 let frame = 0;
 let invulnUntil = 0;
@@ -390,6 +399,7 @@ setupFirePad();
 function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
+  santa = null;
   setPlaySessionActive(false);
   audio.stopBgm();
   document.documentElement.classList.remove('cockpit-ui');
@@ -503,6 +513,7 @@ function initLevel(clearFlash = false) {
     const ufoCount = Math.min(1 + Math.floor((level - 2) / 2), 3);
     for (let i = 0; i < ufoCount; i++) ufos.push(spawnUfo(diff.speedMul));
   }
+  santa = santaActiveForSkin() ? spawnSantaSleigh() : null;
   levelEl.textContent = level;
   audio.playLevelStart();
   if (clearFlash) showLevelFlash();
@@ -554,6 +565,7 @@ function beginPlaySession() {
 
 function gameOverScreen() {
   state = 'GAMEOVER';
+  santa = null;
   setPlaySessionActive(false);
   audio.stopBgm();
   document.documentElement.classList.remove('cockpit-ui');
@@ -854,8 +866,28 @@ function handleBulletAsteroidHit(a, ai, diff) {
   destroyAsteroidStandard(a, ai, diff);
 }
 
+function updateSanta() {
+  if (!santa) return;
+  santa.t++;
+  // Gentle flight path — never aims at the player, never shoots.
+  santa.vx += Math.sin(santa.t * 0.01) * 0.002;
+  santa.vz += Math.cos(santa.t * 0.013) * 0.002;
+  const sp = Math.hypot(santa.vx, santa.vz) || 1;
+  const maxSp = 0.7;
+  if (sp > maxSp) {
+    santa.vx = (santa.vx / sp) * maxSp;
+    santa.vz = (santa.vz / sp) * maxSp;
+  }
+  santa.x += santa.vx;
+  santa.y += santa.vy + Math.sin(santa.t * 0.03) * 0.02;
+  santa.z += santa.vz;
+  santa.yaw = Math.atan2(santa.vx, santa.vz);
+  wrapObj(santa);
+}
+
 function moveEnvironment() {
   updateUfos();
+  updateSanta();
   for (const a of asteroids) {
     if (a.kind === 'magnet') {
       const d = dist3(a.x, a.y, a.z, 0, 0, 0) || 1;
@@ -950,6 +982,13 @@ function checkCollisions() {
       }
     }
     if (hit) continue;
+    if (santa && dist3(b.x, b.y, b.z, santa.x, santa.y, santa.z) < santa.radius + 6) {
+      // Friendly Santa: absorb the shot behind a brief shield, no damage / no score.
+      santa.shieldUntil = performance.now() + SANTA_SHIELD_MS;
+      addParticle(b.x, b.y, b.z, '#ffeebb', 10, 3);
+      bullets.splice(bi, 1);
+      continue;
+    }
     for (let ui = ufos.length - 1; ui >= 0; ui--) {
       const u = ufos[ui];
       if (dist3(b.x, b.y, b.z, u.x, u.y, u.z) < u.radius + 4) {
@@ -975,6 +1014,7 @@ function checkCollisions() {
         return;
       }
     }
+    // Santa is friendly scenery — contact does not harm the ship.
     for (const eb of enemyBullets) {
       if (dist3(0, 0, 0, eb.x, eb.y, eb.z) < ship.radius + 6) {
         dieShip();
@@ -1172,11 +1212,47 @@ function drawAsteroid(a) {
   const projected = projectAsteroid(a);
   if (projected.every(p => !p)) return;
   fillAsteroidOcclusion(projected);
-  const rgb = kindColor(a);
+  const rgb = seasonalAsteroidTint(kindColor(a));
   const drawRgb = a.kind === 'balloon'
     ? rgb.map(c => Math.min(255, Math.floor(c * (0.88 + 0.12 * Math.sin(frame * 0.09 + a.hits)))))
     : rgb;
   drawWireModel3D(projected, a.wire.edges, drawRgb);
+}
+
+function projectSanta() {
+  if (!santa) return null;
+  const cy = Math.cos(santa.yaw);
+  const sy = Math.sin(santa.yaw);
+  const projected = [];
+  for (const v of santa.wire.verts) {
+    const lx = v.x * cy + v.z * sy;
+    const lz = -v.x * sy + v.z * cy;
+    projected.push(project(lx + santa.x, v.y + santa.y, lz + santa.z));
+  }
+  return projected;
+}
+
+function drawSanta() {
+  if (!santa) return;
+  const projected = projectSanta();
+  if (!projected || projected.every(p => !p)) return;
+  drawWireModel3D(projected, santa.wire.edges, [255, 210, 170]);
+  if (performance.now() < santa.shieldUntil) {
+    const p = project(santa.x, santa.y, santa.z);
+    if (!p) return;
+    const pulse = 0.45 + 0.35 * Math.abs(Math.sin(frame * 0.35));
+    const r = Math.max(18, 28 * (p.scale || 1));
+    ctx.strokeStyle = `rgba(120, 220, 255, ${pulse})`;
+    ctx.lineWidth = 2.4;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = `rgba(255, 255, 255, ${pulse * 0.55})`;
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r * 0.72, 0, Math.PI * 2);
+    ctx.stroke();
+  }
 }
 
 function drawAsteroidsBackToFront() {
@@ -1251,6 +1327,7 @@ function draw() {
     applyWindshieldClip(ctx, w, h);
     drawStarfield();
     drawAsteroidsBackToFront();
+    drawSanta();
     for (const u of ufos) drawUfo(u);
     for (const b of bullets) drawMissile(b, false);
     for (const b of enemyBullets) drawMissile(b, true);
@@ -1276,6 +1353,7 @@ function draw() {
   } else {
     drawStarfield();
     drawAsteroidsBackToFront();
+    drawSanta();
     for (const u of ufos) drawUfo(u);
     for (const b of bullets) drawMissile(b, false);
     for (const b of enemyBullets) drawMissile(b, true);
@@ -1322,3 +1400,17 @@ function initStars() {
 initStars();
 
 goHiScoreEl.textContent = getHiScore();
+
+(function updateSeasonHint() {
+  const el = document.getElementById('seasonHint');
+  if (!el) return;
+  const skin = getActiveSkin();
+  if (skin === 'thanksgiving') {
+    el.textContent = 'Thanksgiving special: pumpkin asteroids (limited time)';
+  } else if (skin === 'christmas') {
+    el.textContent = 'Christmas special: gift asteroids + friendly Santa sleigh';
+  } else {
+    el.textContent = '';
+    el.classList.add('hidden');
+  }
+})();

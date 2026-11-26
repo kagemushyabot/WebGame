@@ -1,5 +1,6 @@
 import { rand, dist3 } from './math3d.js';
 import { WORLD, DIFFICULTY } from './world.js';
+import { makeSeasonalAsteroidWire } from './skins.js';
 
 export { DIFFICULTY };
 
@@ -91,7 +92,7 @@ function addEdge(edgeSet, a, b) {
 }
 
 /** Irregular triangulated rock wireframe (icosahedron + noise), reference-style. */
-function makeRockWire(baseR) {
+export function makeRockWire(baseR) {
   const shape = ROCK_SHAPES[Math.floor(rand(0, ROCK_SHAPES.length))];
   const verts = ICO_BASE.verts.map(([x, y, z]) => {
     const len = Math.sqrt(x * x + y * y + z * z) || 1;
@@ -116,6 +117,11 @@ function makeRockWire(baseR) {
     maxR = Math.max(maxR, Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z));
   }
   return { verts, edges, boundsR: maxR };
+}
+
+/** Classic rock, or seasonal skin mesh when a holiday skin is active. */
+export function makeAsteroidWire(baseR) {
+  return makeSeasonalAsteroidWire(baseR) || makeRockWire(baseR);
 }
 
 /** Visual + behavior ids (logic in game.js). */
@@ -179,7 +185,7 @@ export function spawnAsteroid(size, speedMul, ox, oy, oz, vx, vy, vz, kindHint) 
   }
   const kind = kindHint || pickAsteroidKind(size);
   const baseR = size * WORLD.astRadiusPerSize * (kind === 'balloon' ? 0.92 : 1);
-  const wire = makeRockWire(baseR);
+  const wire = makeAsteroidWire(baseR);
   let ivx = vx, ivy = vy, ivz = vz;
   if (kind === 'comet') {
     const sp = Math.sqrt(ivx * ivx + ivy * ivy + ivz * ivz) || 0.1;
