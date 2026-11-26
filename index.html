@@ -2,7 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <title>ASTEROIDS 3D</title>
 <link rel="stylesheet" href="css/game.css">
 </head>
@@ -30,11 +32,11 @@
       <button class="icon-btn" id="btnQuit" title="終了 (Esc)" aria-label="終了">✕</button>
     </div>
 
-    <div class="touch-pad touch-pad--look" id="padLook" aria-label="ドラッグで向き・タップでワープ">
+    <button type="button" class="touch-pad touch-pad--look" id="padLook" aria-label="ドラッグで向き・タップでワープ">
       <span class="touch-pad__ring"></span>
       <span class="touch-pad__label">LOOK</span>
       <span class="touch-pad__hint">tap warp</span>
-    </div>
+    </button>
 
     <button type="button" class="touch-pad touch-pad--fire" id="padFire" aria-label="発射">
       <span class="touch-pad__ring"></span>
@@ -59,7 +61,7 @@
     </div>
   </div>
 
-  <div id="gameOver" class="panel hidden">
+  <div id="gameOver" class="panel">
     <div class="card">
       <h1 id="goTitle">GAME OVER</h1>
       <p>SCORE <b id="goScore">0</b></p>

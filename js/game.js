@@ -10,6 +10,7 @@ import { WORLD } from './world.js';
 import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
 import {
   isPortraitBlocked,
+  isGameplayOrientationBlocked,
   setupOrientationGate,
   requestGameFullscreen,
   exitGameFullscreen
@@ -159,40 +160,80 @@ function keyup(e) {
 window.addEventListener('keydown', keydown);
 window.addEventListener('keyup', keyup);
 
+function beginLook(clientX, clientY, pointerId) {
+  if (state !== 'PLAYING') return;
+  lookPtr = {
+    id: pointerId,
+    sx: clientX,
+    sy: clientY,
+    yaw0: ship.yaw,
+    pitch0: ship.pitch,
+    moved: false,
+    t0: Date.now()
+  };
+  padLook.classList.add('active');
+}
+
+function moveLook(clientX, clientY, pointerId) {
+  if (!lookPtr || lookPtr.id !== pointerId || state !== 'PLAYING') return;
+  const dx = clientX - lookPtr.sx;
+  const dy = clientY - lookPtr.sy;
+  if (Math.abs(dx) + Math.abs(dy) > 8) lookPtr.moved = true;
+  ship.yaw = lookPtr.yaw0 + dx * 0.005;
+  ship.pitch = clamp(lookPtr.pitch0 + dy * 0.004, -1.2, 1.2);
+}
+
+function endLook(pointerId) {
+  if (!lookPtr || lookPtr.id !== pointerId) return;
+  if (!lookPtr.moved && Date.now() - lookPtr.t0 < 320) tryHyperspace();
+  lookPtr = null;
+  padLook.classList.remove('active');
+}
+
 function setupTouchPads() {
   if (!padLook) return;
   padLook.addEventListener('pointerdown', e => {
     if (state !== 'PLAYING') return;
     e.preventDefault();
     padLook.setPointerCapture(e.pointerId);
-    lookPtr = {
-      id: e.pointerId,
-      sx: e.clientX,
-      sy: e.clientY,
-      yaw0: ship.yaw,
-      pitch0: ship.pitch,
-      moved: false,
-      t0: Date.now()
-    };
-    padLook.classList.add('active');
+    beginLook(e.clientX, e.clientY, e.pointerId);
   });
   padLook.addEventListener('pointermove', e => {
-    if (!lookPtr || lookPtr.id !== e.pointerId || state !== 'PLAYING') return;
-    const dx = e.clientX - lookPtr.sx;
-    const dy = e.clientY - lookPtr.sy;
-    if (Math.abs(dx) + Math.abs(dy) > 8) lookPtr.moved = true;
-    ship.yaw = lookPtr.yaw0 + dx * 0.005;
-    ship.pitch = clamp(lookPtr.pitch0 + dy * 0.004, -1.2, 1.2);
-  });
-  const endLook = e => {
     if (!lookPtr || lookPtr.id !== e.pointerId) return;
-    if (!lookPtr.moved && Date.now() - lookPtr.t0 < 320) tryHyperspace();
-    lookPtr = null;
-    padLook.classList.remove('active');
+    e.preventDefault();
+    moveLook(e.clientX, e.clientY, e.pointerId);
+  });
+  const endLookPointer = e => {
+    endLook(e.pointerId);
     try { padLook.releasePointerCapture(e.pointerId); } catch { /* noop */ }
   };
-  padLook.addEventListener('pointerup', endLook);
-  padLook.addEventListener('pointercancel', endLook);
+  padLook.addEventListener('pointerup', endLookPointer);
+  padLook.addEventListener('pointercancel', endLookPointer);
+
+  if (typeof window.PointerEvent !== 'function') {
+    padLook.addEventListener('touchstart', e => {
+      if (state !== 'PLAYING' || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      e.preventDefault();
+      beginLook(t.clientX, t.clientY, t.identifier);
+    }, { passive: false });
+    padLook.addEventListener('touchmove', e => {
+      if (!lookPtr || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      if (t.identifier !== lookPtr.id) return;
+      e.preventDefault();
+      moveLook(t.clientX, t.clientY, t.identifier);
+    }, { passive: false });
+    padLook.addEventListener('touchend', e => {
+      if (!lookPtr) return;
+      for (const t of e.changedTouches) {
+        if (t.identifier === lookPtr.id) endLook(t.identifier);
+      }
+    });
+    padLook.addEventListener('touchcancel', e => {
+      for (const t of e.changedTouches) endLook(t.identifier);
+    });
+  }
 }
 
 function setupFirePad() {
@@ -287,10 +328,10 @@ function initLevel(clearFlash = false) {
 
 function startGame() {
   if (isPortraitBlocked()) return;
+  requestGameFullscreen(gameContainer);
   readDifficulty();
   audio.init();
   audio.resume();
-  requestGameFullscreen(gameContainer);
   state = 'PLAYING';
   score = 0;
   lives = 3;
@@ -301,7 +342,7 @@ function startGame() {
   livesEl.textContent = lives;
   levelEl.textContent = level;
   startScreen.classList.remove('open');
-  gameOver.classList.add('hidden');
+  gameOver.classList.remove('open');
   gyroActive = false;
   baseBeta = 0;
   baseGamma = 0;
@@ -319,7 +360,7 @@ function gameOverScreen() {
   saveHiScore();
   goScoreEl.textContent = score;
   goHiScoreEl.textContent = Math.max(score, getHiScore());
-  gameOver.classList.remove('hidden');
+  gameOver.classList.add('open');
 }
 function resetGame() { startGame(); }
 
@@ -820,7 +861,7 @@ function draw() {
 
 function loop() {
   if (state !== 'PLAYING') return;
-  if (isPortraitBlocked()) {
+  if (isGameplayOrientationBlocked()) {
     requestAnimationFrame(loop);
     return;
   }
