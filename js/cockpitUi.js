@@ -172,7 +172,8 @@ function measureHud(ctx, w, h, ui) {
     scoreVal,
     timerLabel,
     timerVal,
-    beaconY: h * CONSOLE_TOP + (h - h * CONSOLE_TOP) * 0.4
+    consoleBand: h * (1 - CONSOLE_TOP),
+    beaconY: h * CONSOLE_TOP + h * (1 - CONSOLE_TOP) * 0.36
   };
 }
 
@@ -223,32 +224,36 @@ function drawTopStatusTrapezoid(ctx, L, lives) {
   ctx.fillText(L.timerVal, L.col3X, L.valueY);
 }
 
-function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
-  const r = Math.min(vmin * 0.048, 34);
+function drawBeacon(ctx, cx, cy, threat, frame, vmin, consoleBand) {
+  const band = Math.max(28, consoleBand || vmin * 0.12);
+  // Keep lamp + label inside the bottom console deck on short mobile screens.
+  const r = Math.min(vmin * 0.036, band * 0.26, 22);
+  const labelFs = Math.min(Math.max(9, vmin * 0.018), band * 0.2, 13);
   const { core, glow, ring } = threatColors(threat, frame);
-  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.1);
+  const glowR = r * 1.75;
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
   grd.addColorStop(0, glow);
   grd.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grd;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 2.1, 0, Math.PI * 2);
+  ctx.arc(cx, cy, glowR, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = ring;
-  ctx.lineWidth = 2.2;
+  ctx.lineWidth = Math.max(1.4, r * 0.12);
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 1.32, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 1.28, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  const labelFs = Math.max(11, vmin * 0.024);
   ctx.fillStyle = 'rgba(220, 255, 235, 0.95)';
   ctx.font = `800 ${labelFs}px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   const label = threat === 0 ? 'SAFE' : threat === 1 ? 'CAUTION' : 'DANGER';
-  ctx.fillText(label, cx, cy + r * 1.95 + labelFs * 0.25);
+  const labelY = Math.min(cy + r * 1.7 + labelFs * 0.35, cy + band * 0.48);
+  ctx.fillText(label, cx, labelY);
 }
 
 function drawRadarSquare(ctx, x, y, size, ui) {
@@ -303,7 +308,9 @@ function drawRadarSquare(ctx, x, y, size, ui) {
 function topRightMuteButtonLayout(w, h, vmin) {
   const btnSize = Math.min(Math.max(32, vmin * 0.05), 44);
   const gap = Math.max(5, btnSize * 0.16);
-  const marginR = Math.max(52, w * 0.07);
+  // Leave room for close button (~52px) + gap on the right.
+  const closeReserve = Math.max(64, Math.min(w * 0.12, 80));
+  const marginR = closeReserve + 10;
   const marginT = Math.max(8, h * 0.016);
   const left0 = w - marginR - btnSize * 2 - gap;
   return {
@@ -316,7 +323,7 @@ export function drawCockpitInstruments(ctx, w, h, ui) {
   const L = measureHud(ctx, w, h, ui);
   drawRadarSquare(ctx, L.margin, L.radarY, L.radarSize, ui);
   drawTopStatusTrapezoid(ctx, L, ui.lives);
-  drawBeacon(ctx, w * 0.5, L.beaconY, ui.threat, ui.frame, L.vmin);
+  drawBeacon(ctx, w * 0.5, L.beaconY, ui.threat, ui.frame, L.vmin, L.consoleBand);
 }
 
 export function cockpitControlLayout(w, h, ui) {
