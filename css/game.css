@@ -21,9 +21,9 @@ html.immersive-mode body {
 }
 html.immersive-mode #game-container {
   width: 100%;
-  height: 100dvh;
-  height: -webkit-fill-available;
-  max-height: 100dvh;
+  height: var(--app-vh, 100dvh);
+  height: var(--app-vh, -webkit-fill-available);
+  max-height: var(--app-vh, 100dvh);
 }
 canvas#game { display: block; width: 100%; height: 100%; }
 
@@ -100,9 +100,9 @@ button.start:active { transform: scale(0.95); background: #2a5fcc; }
 
 .touch-pad {
   position: absolute;
-  bottom: calc(21vh + max(10px, env(safe-area-inset-bottom, 0px)));
-  width: clamp(88px, 22vw, 120px);
-  height: clamp(88px, 22vw, 120px);
+  bottom: max(8px, env(safe-area-inset-bottom, 0px));
+  width: clamp(80px, 20vw, 108px);
+  height: clamp(80px, 20vw, 108px);
   border-radius: 50%;
   border: 2px solid rgba(120, 165, 255, 0.45);
   background: rgba(12, 16, 28, 0.55);
@@ -116,8 +116,14 @@ button.start:active { transform: scale(0.95); background: #2a5fcc; }
   cursor: pointer;
   box-shadow: inset 0 0 24px rgba(60, 120, 255, 0.12), 0 8px 28px rgba(0, 0, 0, 0.35);
 }
-.touch-pad--look { left: clamp(14px, 4vw, 28px); }
-.touch-pad--fire { right: clamp(14px, 4vw, 28px); border-color: rgba(255, 170, 90, 0.5); box-shadow: inset 0 0 24px rgba(255, 120, 40, 0.1), 0 8px 28px rgba(0, 0, 0, 0.35); }
+.touch-pad--look { left: max(8px, env(safe-area-inset-left, 0px), 2vw); }
+.touch-pad--fire { right: max(8px, env(safe-area-inset-right, 0px), 2vw); border-color: rgba(255, 170, 90, 0.5); box-shadow: inset 0 0 24px rgba(255, 120, 40, 0.1), 0 8px 28px rgba(0, 0, 0, 0.35); }
+html.cockpit-ui .touch-pad {
+  bottom: max(6px, env(safe-area-inset-bottom, 0px));
+  width: clamp(70px, 17vw, 96px);
+  height: clamp(70px, 17vw, 96px);
+  z-index: 48;
+}
 .touch-pad__ring {
   position: absolute;
   inset: 12%;

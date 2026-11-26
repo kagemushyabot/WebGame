@@ -69,13 +69,28 @@ function isFullscreenActive() {
   );
 }
 
+export function syncViewportHeight() {
+  const vh = window.visualViewport?.height ?? window.innerHeight;
+  document.documentElement.style.setProperty('--app-vh', `${vh}px`);
+}
+
 export function applyImmersiveMode(on) {
   document.documentElement.classList.toggle('immersive-mode', on);
-  if (on && isMobileDevice()) {
-    requestAnimationFrame(() => {
-      window.scrollTo(0, 1);
-      requestAnimationFrame(() => window.scrollTo(0, 0));
-    });
+  if (on) {
+    syncViewportHeight();
+    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    if (isMobileDevice()) {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, 1);
+        requestAnimationFrame(() => {
+          window.scrollTo(0, 0);
+          syncViewportHeight();
+        });
+      });
+    }
+  } else {
+    window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+    document.documentElement.style.removeProperty('--app-vh');
   }
 }
 

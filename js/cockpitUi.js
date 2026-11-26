@@ -7,13 +7,15 @@ function formatTime(sec) {
   return `${m}:${r.toString().padStart(2, '0')}`;
 }
 
-function fitLinesFont(ctx, lines, maxWidth, preferredPx) {
+const FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+
+function fitLinesFont(ctx, lines, maxWidth, maxTextHeight, preferredPx) {
   let fs = preferredPx;
-  const family = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
-  while (fs >= 10) {
-    ctx.font = `700 ${fs}px ${family}`;
-    const ok = lines.every(l => ctx.measureText(l).width <= maxWidth);
-    if (ok) return fs;
+  while (fs >= 9) {
+    ctx.font = `700 ${fs}px ${FONT}`;
+    const widthOk = lines.every(l => ctx.measureText(l).width <= maxWidth);
+    const heightOk = lines.length * fs * 1.22 <= maxTextHeight;
+    if (widthOk && heightOk) return fs;
     fs -= 1;
   }
   return fs;
@@ -25,30 +27,30 @@ function drawPanel(ctx, x, y, ww, hh, title) {
   ctx.strokeStyle = 'rgba(75, 220, 140, 0.55)';
   ctx.lineWidth = 1.5;
   ctx.strokeRect(x + 0.5, y + 0.5, ww - 1, hh - 1);
-  if (title) {
-    const titleFs = Math.max(11, Math.min(ww, hh) * 0.11);
-    ctx.fillStyle = 'rgba(120, 200, 150, 0.85)';
-    ctx.font = `600 ${titleFs}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(title, x + ww * 0.07, y + titleFs * 1.15);
-  }
+  if (!title) return;
+  const titleFs = Math.min(Math.max(10, hh * 0.13), ww * 0.09);
+  ctx.fillStyle = 'rgba(120, 200, 150, 0.85)';
+  ctx.font = `600 ${titleFs}px ${FONT}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(title, x + ww * 0.06, y + titleFs * 1.1);
 }
 
 function drawPanelLines(ctx, x, y, ww, hh, lines, title) {
   drawPanel(ctx, x, y, ww, hh, title);
-  const padX = ww * 0.07;
+  const padX = ww * 0.06;
   const innerW = ww - padX * 2;
-  const titleBand = title ? hh * 0.22 : hh * 0.12;
-  const vmin = Math.min(ww, hh);
-  const preferred = Math.max(13, vmin * 0.13);
-  const fs = fitLinesFont(ctx, lines, innerW, preferred);
+  const titleBand = title ? hh * 0.2 : hh * 0.1;
+  const bottomPad = hh * 0.06;
+  const textH = hh - titleBand - bottomPad;
+  const preferred = Math.max(11, Math.min(ww, hh) * 0.12);
+  const fs = fitLinesFont(ctx, lines, innerW, textH, preferred);
   ctx.fillStyle = 'rgba(170, 255, 200, 0.98)';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = `700 ${fs}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-  const gap = fs * 1.28;
-  const startY = y + titleBand + fs;
+  ctx.font = `700 ${fs}px ${FONT}`;
+  const gap = Math.min(fs * 1.2, textH / lines.length);
+  const startY = y + titleBand + fs * 0.95;
   lines.forEach((line, i) => ctx.fillText(line, x + padX, startY + i * gap));
 }
 
@@ -64,7 +66,7 @@ function threatColors(level, frame) {
 }
 
 function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
-  const r = vmin * 0.038;
+  const r = Math.min(vmin * 0.034, 22);
   const { core, glow, ring } = threatColors(threat, frame);
   const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
   grd.addColorStop(0, glow);
@@ -74,30 +76,29 @@ function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
   ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = ring;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 1.3, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  const labelFs = Math.max(11, vmin * 0.022);
+  const labelFs = Math.max(10, vmin * 0.019);
   ctx.fillStyle = 'rgba(200,255,220,0.92)';
-  ctx.font = `700 ${labelFs}px ui-monospace, monospace`;
+  ctx.font = `700 ${labelFs}px ${FONT}`;
   ctx.textAlign = 'center';
   const label = threat === 0 ? 'SAFE' : threat === 1 ? 'CAUTION' : 'DANGER';
-  ctx.fillText(label, cx, cy + r * 2.6);
+  ctx.fillText(label, cx, cy + r * 2.35);
 }
 
 function drawRadarSquare(ctx, x, y, size, ui) {
   drawPanel(ctx, x, y, size, size, 'MAP');
-  const pad = size * 0.08;
-  const titleBand = size * 0.16;
-  const footerBand = size * 0.17;
-  const mapSize = size - pad * 2 - titleBand - footerBand;
+  const titleBand = size * 0.14;
+  const footerBand = size * 0.14;
+  const mapSize = size - titleBand - footerBand - size * 0.06;
   const mx = x + (size - mapSize) / 2;
-  const my = y + titleBand;
+  const my = y + titleBand + size * 0.02;
   ctx.fillStyle = 'rgba(0, 20, 30, 0.88)';
   ctx.fillRect(mx, my, mapSize, mapSize);
   ctx.strokeStyle = 'rgba(80, 160, 200, 0.5)';
@@ -119,9 +120,9 @@ function drawRadarSquare(ctx, x, y, size, ui) {
   ctx.stroke();
   ctx.fillStyle = 'rgba(120, 220, 255, 0.95)';
   ctx.beginPath();
-  ctx.moveTo(cx, cy - 5);
-  ctx.lineTo(cx - 4, cy + 4);
-  ctx.lineTo(cx + 4, cy + 4);
+  ctx.moveTo(cx, cy - 4);
+  ctx.lineTo(cx - 3, cy + 3);
+  ctx.lineTo(cx + 3, cy + 3);
   ctx.closePath();
   ctx.fill();
   for (const a of ui.asteroids) {
@@ -131,58 +132,61 @@ function drawRadarSquare(ctx, x, y, size, ui) {
     const py = cy + lz * scale;
     if (px < mx || px > mx + mapSize || py < my || py > my + mapSize) continue;
     ctx.fillStyle = a.kind === 'chain' ? '#ff9944' : a.kind === 'balloon' ? '#ff88cc' : '#88ccaa';
-    const dot = Math.max(2.5, 2.2 + a.size * 0.9);
+    const dot = Math.max(2, 2 + a.size * 0.8);
     ctx.beginPath();
     ctx.arc(px, py, dot, 0, Math.PI * 2);
     ctx.fill();
   }
-  const footFs = Math.max(11, size * 0.075);
+  const footFs = fitLinesFont(ctx, [`LEFT ${ui.asteroidCount}`], size * 0.88, size * 0.12, size * 0.08);
   ctx.fillStyle = 'rgba(180, 230, 255, 0.95)';
-  ctx.font = `700 ${footFs}px ui-monospace, monospace`;
+  ctx.font = `700 ${footFs}px ${FONT}`;
   ctx.textAlign = 'center';
-  const remain = `LEFT ${ui.asteroidCount}`;
-  ctx.fillText(remain, x + size / 2, y + size - footerBand * 0.45);
+  ctx.fillText(`LEFT ${ui.asteroidCount}`, x + size / 2, y + size - footerBand * 0.35);
+}
+
+function consoleLayout(w, h) {
+  const vmin = Math.min(w, h);
+  const margin = w * 0.022;
+  const rowY = h * CONSOLE_TOP + h * 0.018;
+  const rowH = Math.max(h * 0.102, vmin * 0.1);
+  const beaconSlot = vmin * 0.17;
+  const sideW = (w - margin * 2 - beaconSlot) / 2;
+  const radarSize = Math.min(vmin * 0.24, w * 0.26, h * 0.22);
+  const radarY = h * 0.11;
+  return { margin, rowY, rowH, beaconSlot, sideW, vmin, radarSize, radarY };
 }
 
 /** Cockpit-mounted HUD: stats, timer, radar, proximity beacon. */
 export function drawCockpitInstruments(ctx, w, h, ui) {
-  const ct = CONSOLE_TOP;
-  const vmin = Math.min(w, h);
-  const deskY = h * (ct + 0.018);
-  const panelW = Math.max(w * 0.21, vmin * 0.22);
-  const panelH = Math.max(h * 0.1, vmin * 0.11);
-  const panelH2 = Math.max(h * 0.075, vmin * 0.085);
+  const L = consoleLayout(w, h);
 
-  drawPanelLines(ctx, w * 0.04, deskY, panelW, panelH, [
+  const statusX = L.margin;
+  const timerX = w - L.margin - L.sideW;
+  const beaconX = w * 0.5;
+  const beaconY = L.rowY + L.rowH * 0.36;
+
+  drawPanelLines(ctx, statusX, L.rowY, L.sideW, L.rowH, [
     `SCORE ${ui.score}`,
-    `LEVEL ${ui.level}`,
+    `LV ${ui.level}`,
     `LIVES ${ui.lives}`
   ], 'STATUS');
 
-  drawPanelLines(ctx, w * 0.04, deskY + panelH + h * 0.008, panelW * 0.92, panelH2, [
+  drawPanelLines(ctx, timerX, L.rowY, L.sideW, L.rowH, [
     formatTime(ui.timeLeft),
     ui.muted ? 'AUDIO OFF' : 'AUDIO ON'
   ], 'TIMER');
 
-  drawBeacon(ctx, w * 0.5, h * (ct + 0.11), ui.threat, ui.frame, vmin);
+  drawBeacon(ctx, beaconX, beaconY, ui.threat, ui.frame, L.vmin);
 
-  const radarSize = Math.min(w * 0.27, h * 0.3, vmin * 0.3);
-  const closeReserve = Math.max(52, vmin * 0.08);
-  const radarX = w - radarSize - w * 0.035;
-  const radarY = h * 0.075 + closeReserve;
-  drawRadarSquare(ctx, radarX, radarY, radarSize, ui);
+  drawRadarSquare(ctx, L.margin, L.radarY, L.radarSize, ui);
 }
 
 /** Normalized rects for overlaying HTML controls on console screens. */
 export function cockpitControlLayout(w, h) {
-  const ct = CONSOLE_TOP;
-  const vmin = Math.min(w, h);
-  const deskY = h * (ct + 0.018);
-  const panelW = Math.max(w * 0.21, vmin * 0.22);
-  const panelH = Math.max(h * 0.1, vmin * 0.11);
-  const panelH2 = Math.max(h * 0.075, vmin * 0.085);
+  const L = consoleLayout(w, h);
+  const timerX = w - L.margin - L.sideW;
   return {
-    audio: { left: w * 0.04, top: deskY + panelH + h * 0.008, width: panelW * 0.92, height: panelH2 },
-    recenter: { left: w * 0.04, top: deskY, width: panelW, height: panelH }
+    audio: { left: timerX, top: L.rowY, width: L.sideW, height: L.rowH },
+    recenter: { left: L.margin, top: L.rowY, width: L.sideW, height: L.rowH }
   };
 }

@@ -17,7 +17,8 @@ import {
   requestGameFullscreen,
   exitGameFullscreen,
   setPlaySessionActive,
-  bindFullscreenMaintenance
+  bindFullscreenMaintenance,
+  syncViewportHeight
 } from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
@@ -79,7 +80,7 @@ function layoutCockpitControls() {
   apply(btnRecenter, L.recenter);
   apply(btnMute, L.audio);
 }
-window.addEventListener('resize', () => { resize(); layoutCockpitControls(); });
+window.addEventListener('resize', () => { resize(); syncViewportHeight(); layoutCockpitControls(); });
 resize();
 
 let beta = 0, gamma = 0;
