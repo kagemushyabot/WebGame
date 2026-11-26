@@ -146,32 +146,32 @@ function drawRadarSquare(ctx, x, y, size, ui) {
 
 function consoleLayout(w, h) {
   const vmin = Math.min(w, h);
-  const margin = w * 0.022;
+  const margin = w * 0.018;
   const rowY = h * CONSOLE_TOP + h * 0.018;
-  const rowH = Math.max(h * 0.102, vmin * 0.1);
-  const beaconSlot = vmin * 0.17;
-  const sideW = (w - margin * 2 - beaconSlot) / 2;
+  const rowH = Math.max(h * 0.098, vmin * 0.095);
+  const padReserve = vmin * 0.21;
+  const sideW = Math.min(vmin * 0.17, w * 0.155);
+  const statusX = margin + padReserve * 0.55;
+  const timerX = w - margin - padReserve * 0.55 - sideW;
   const radarSize = Math.min(vmin * 0.24, w * 0.26, h * 0.22);
   const radarY = h * 0.11;
-  return { margin, rowY, rowH, beaconSlot, sideW, vmin, radarSize, radarY };
+  return { margin, rowY, rowH, sideW, statusX, timerX, vmin, radarSize, radarY, padReserve };
 }
 
 /** Cockpit-mounted HUD: stats, timer, radar, proximity beacon. */
 export function drawCockpitInstruments(ctx, w, h, ui) {
   const L = consoleLayout(w, h);
 
-  const statusX = L.margin;
-  const timerX = w - L.margin - L.sideW;
   const beaconX = w * 0.5;
   const beaconY = L.rowY + L.rowH * 0.36;
 
-  drawPanelLines(ctx, statusX, L.rowY, L.sideW, L.rowH, [
+  drawPanelLines(ctx, L.statusX, L.rowY, L.sideW, L.rowH, [
     `SCORE ${ui.score}`,
     `LV ${ui.level}`,
     `LIVES ${ui.lives}`
   ], 'STATUS');
 
-  drawPanelLines(ctx, timerX, L.rowY, L.sideW, L.rowH, [
+  drawPanelLines(ctx, L.timerX, L.rowY, L.sideW, L.rowH, [
     formatTime(ui.timeLeft),
     ui.muted ? 'AUDIO OFF' : 'AUDIO ON'
   ], 'TIMER');
@@ -184,9 +184,8 @@ export function drawCockpitInstruments(ctx, w, h, ui) {
 /** Normalized rects for overlaying HTML controls on console screens. */
 export function cockpitControlLayout(w, h) {
   const L = consoleLayout(w, h);
-  const timerX = w - L.margin - L.sideW;
   return {
-    audio: { left: timerX, top: L.rowY, width: L.sideW, height: L.rowH },
-    recenter: { left: L.margin, top: L.rowY, width: L.sideW, height: L.rowH }
+    audio: { left: L.timerX, top: L.rowY, width: L.sideW, height: L.rowH },
+    recenter: { left: L.statusX, top: L.rowY, width: L.sideW, height: L.rowH }
   };
 }
