@@ -93,9 +93,14 @@ function layoutCockpitControls() {
     el.style.height = `${box.height}px`;
     el.style.right = 'auto';
   };
+  const applyRound = (el, box) => {
+    apply(el, box);
+    if (!el || !box) return;
+    el.style.fontSize = `${Math.max(10, box.width * 0.36)}px`;
+  };
   apply(btnRecenter, L.recenter);
-  apply(btnMuteMusic, L.musicMute);
-  apply(btnMuteSfx, L.sfxMute);
+  applyRound(btnMuteMusic, L.musicMute);
+  applyRound(btnMuteSfx, L.sfxMute);
 }
 
 function updateMuteButtons() {
@@ -139,6 +144,11 @@ function requestIOS() {
 window.addEventListener('deviceorientation', e => { if (e.beta != null) onDeviceOrientation(e); });
 
 let lookPtr = null;
+/** Radians per second — coast after releasing LOOK drag. */
+let lookCoast = null;
+let lastLoopAt = 0;
+const LOOK_SENS_X = 0.005;
+const LOOK_SENS_Y = 0.004;
 let warpFx = { t: 0, duration: 48 };
 
 let ship = newShip();
@@ -219,12 +229,17 @@ window.addEventListener('keyup', keyup);
 
 function beginLook(clientX, clientY, pointerId) {
   if (state !== 'PLAYING') return;
+  lookCoast = null;
+  const t = performance.now();
   lookPtr = {
     id: pointerId,
     sx: clientX,
     sy: clientY,
-    yaw0: ship.yaw,
-    pitch0: ship.pitch,
+    lastX: clientX,
+    lastY: clientY,
+    lastT: t,
+    vyaw: 0,
+    vpitch: 0,
     moved: false,
     t0: Date.now()
   };
@@ -233,18 +248,42 @@ function beginLook(clientX, clientY, pointerId) {
 
 function moveLook(clientX, clientY, pointerId) {
   if (!lookPtr || lookPtr.id !== pointerId || state !== 'PLAYING') return;
+  const now = performance.now();
+  const ddx = clientX - lookPtr.lastX;
+  const ddy = clientY - lookPtr.lastY;
   const dx = clientX - lookPtr.sx;
   const dy = clientY - lookPtr.sy;
   if (Math.abs(dx) + Math.abs(dy) > 8) lookPtr.moved = true;
-  ship.yaw = lookPtr.yaw0 + dx * 0.005;
-  ship.pitch = clamp(lookPtr.pitch0 + dy * 0.004, -1.2, 1.2);
+  ship.yaw += ddx * LOOK_SENS_X;
+  ship.pitch = clamp(ship.pitch + ddy * LOOK_SENS_Y, -1.2, 1.2);
+  const dt = Math.max(0.008, (now - lookPtr.lastT) / 1000);
+  const blend = 0.45;
+  const instantYaw = (ddx / dt) * LOOK_SENS_X;
+  const instantPitch = (ddy / dt) * LOOK_SENS_Y;
+  lookPtr.vyaw = lookPtr.vyaw * (1 - blend) + instantYaw * blend;
+  lookPtr.vpitch = lookPtr.vpitch * (1 - blend) + instantPitch * blend;
+  lookPtr.lastX = clientX;
+  lookPtr.lastY = clientY;
+  lookPtr.lastT = now;
 }
 
 function endLook(pointerId) {
   if (!lookPtr || lookPtr.id !== pointerId) return;
   if (!lookPtr.moved && Date.now() - lookPtr.t0 < 320) tryHyperspace();
+  else if (lookPtr.moved) {
+    const minV = 0.02;
+    if (Math.abs(lookPtr.vyaw) > minV || Math.abs(lookPtr.vpitch) > minV) {
+      lookCoast = { yaw: lookPtr.vyaw, pitch: lookPtr.vpitch };
+    }
+  }
   lookPtr = null;
   padLook.classList.remove('active');
+}
+
+function applyLookCoast(dt) {
+  if (lookPtr || !lookCoast || state !== 'PLAYING') return;
+  ship.yaw += lookCoast.yaw * dt;
+  ship.pitch = clamp(ship.pitch + lookCoast.pitch * dt, -1.2, 1.2);
 }
 
 function setupTouchPads() {
@@ -314,6 +353,7 @@ setupFirePad();
 function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
+  lookCoast = null;
   setPlaySessionActive(false);
   audio.stopBgm();
   document.documentElement.classList.remove('cockpit-ui');
@@ -326,6 +366,7 @@ function exitToMenu() {
 
 btnRecenter.addEventListener('click', () => {
   if (gyroActive) { baseBeta = beta; baseGamma = gamma; baselineCaptured = true; }
+  lookCoast = null;
   ship.yaw = 0;
   ship.pitch = 0;
 });
@@ -455,6 +496,7 @@ function startGame() {
   baseBeta = 0;
   baseGamma = 0;
   baselineCaptured = false;
+  lookCoast = null;
   ship.yaw = 0;
   ship.pitch = 0;
   pauseHint?.classList.add('hidden');
@@ -1194,6 +1236,10 @@ function loop() {
     requestAnimationFrame(loop);
     return;
   }
+  const now = performance.now();
+  const dt = lastLoopAt ? Math.min(0.05, (now - lastLoopAt) / 1000) : 1 / 60;
+  lastLoopAt = now;
+  applyLookCoast(dt);
   frame++;
   if (fireCooldown > 0) fireCooldown--;
   if (hyperspaceCooldown > 0) {

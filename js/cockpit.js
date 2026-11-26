@@ -2,9 +2,14 @@
  * Cockpit layout from reference art: canopy, main + side windows, A-pillars, console.
  */
 
-/** Console band = bottom ~1/5 of the screen. */
-export const CONSOLE_TOP = 0.8;
+/** Console band — shallow deck near the bottom (HUD sits just above it). */
+export const CONSOLE_TOP = 0.875;
+/** Center overhead window frame (normalized 0–1). */
+export const CANOPY_CENTER = { left: 0.34, right: 0.66, top: 0.015, bottom: 0.088 };
 const VIEW_BOTTOM = 0.798;
+/** Apex of forward-glass V — center bottom, just above CAUTION beacon. */
+const VIEW_NOTCH_Y = 0.858;
+const VIEW_NOTCH_X = 0.5;
 const MAIN_TOP = 0.108;
 const MAIN_LEFT = 0.038;
 const MAIN_RIGHT = 0.962;
@@ -21,7 +26,9 @@ const WINDOWS_N = {
   ],
   mainForward: [
     [MAIN_LEFT, MAIN_TOP], [MAIN_RIGHT, MAIN_TOP],
-    [MAIN_BOT_RIGHT, VIEW_BOTTOM], [MAIN_BOT_LEFT, VIEW_BOTTOM]
+    [MAIN_BOT_RIGHT, VIEW_BOTTOM],
+    [VIEW_NOTCH_X, VIEW_NOTCH_Y],
+    [MAIN_BOT_LEFT, VIEW_BOTTOM]
   ],
   sideLeft: [
     [0.008, 0.19], [0.115, MAIN_TOP], [MAIN_BOT_LEFT, VIEW_BOTTOM - 0.01],
@@ -63,7 +70,9 @@ function buildWireSegments() {
     [[MAIN_RIGHT, MAIN_TOP], [0.972, CONSOLE_TOP - 0.02]],
     [[0.048, 0.088], [0.048, VIEW_BOTTOM - 0.04]],
     [[0.952, 0.088], [0.952, VIEW_BOTTOM - 0.04]],
-    [[0.5, MAIN_TOP], [0.5, VIEW_BOTTOM]],
+    [[0.5, 0.015], [0.5, VIEW_NOTCH_Y]],
+    [[MAIN_BOT_LEFT, VIEW_BOTTOM], [VIEW_NOTCH_X, VIEW_NOTCH_Y]],
+    [[VIEW_NOTCH_X, VIEW_NOTCH_Y], [MAIN_BOT_RIGHT, VIEW_BOTTOM]],
     [[0, 1], [0.28, 1]],
     [[0.28, 1], [0.26, CONSOLE_TOP]],
     [[0.26, CONSOLE_TOP], [0.02, CONSOLE_TOP - 0.02]],
@@ -130,7 +139,7 @@ const COLOR_FRAME_BLOCK = '#1c2433';
 /** Overhead strip above the canopy. */
 const COLOR_OVERHEAD = '#161d29';
 /** Dashboard deck. */
-const COLOR_CONSOLE = '#0a0e15';
+const COLOR_CONSOLE = 'rgba(8, 12, 18, 0.72)';
 
 export function drawCockpitOverlay(ctx, w, h) {
   const glassPolys = polysFromWindows(w, h);

@@ -173,16 +173,16 @@ html.cockpit-ui #btnRecenter { display: grid; }
 .touch-pad--look { left: max(8px, env(safe-area-inset-left, 0px), 2vw); }
 .touch-pad--fire { right: max(8px, env(safe-area-inset-right, 0px), 2vw); border-color: rgba(255, 170, 90, 0.5); box-shadow: inset 0 0 24px rgba(255, 120, 40, 0.1), 0 8px 28px rgba(0, 0, 0, 0.35); }
 html.cockpit-ui .touch-pad {
-  bottom: max(2px, env(safe-area-inset-bottom, 0px));
-  width: clamp(128px, 38vmin, 210px);
-  height: clamp(128px, 38vmin, 210px);
+  bottom: max(12px, env(safe-area-inset-bottom, 0px), 2vh);
+  width: clamp(92px, 24vmin, 136px);
+  height: clamp(92px, 24vmin, 136px);
   z-index: 48;
 }
 html.cockpit-ui .touch-pad--look {
-  left: max(2px, env(safe-area-inset-left, 0px));
+  left: max(12px, env(safe-area-inset-left, 0px), 2.5vw);
 }
 html.cockpit-ui .touch-pad--fire {
-  right: max(2px, env(safe-area-inset-right, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px), 2.5vw);
 }
 html.cockpit-ui .touch-pad__label {
   font-size: clamp(13px, 4vmin, 20px);
@@ -265,9 +265,26 @@ html.cockpit-ui .icon-btn.cockpit-hit {
   font-size: clamp(14px, 3.5vw, 18px);
   border-radius: 8px;
 }
+html.cockpit-ui .icon-btn.mute-toggle.cockpit-hit {
+  opacity: 0.82;
+  border-radius: 50%;
+  border-color: rgba(120, 220, 160, 0.55);
+  background: rgba(8, 22, 16, 0.88);
+  display: grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+}
+html.cockpit-ui .icon-btn.mute-toggle.cockpit-hit.is-off {
+  opacity: 0.5;
+}
 html.cockpit-ui .icon-btn.cockpit-hit:active {
   opacity: 0.35;
   background: rgba(40, 100, 70, 0.55);
+}
+html.cockpit-ui .icon-btn.mute-toggle.cockpit-hit:active {
+  opacity: 0.95;
+  background: rgba(40, 100, 70, 0.7);
 }
 
 .btn-close-game {

@@ -1,4 +1,4 @@
-import { CONSOLE_TOP } from './cockpit.js';
+import { CANOPY_CENTER, CONSOLE_TOP } from './cockpit.js';
 
 function formatTime(sec) {
   const s = Math.max(0, Math.ceil(sec));
@@ -68,7 +68,7 @@ function threatColors(level, frame) {
 }
 
 function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
-  const r = Math.min(vmin * 0.034, 22);
+  const r = Math.min(vmin * 0.056, 38);
   const { core, glow, ring } = threatColors(threat, frame);
   const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
   grd.addColorStop(0, glow);
@@ -78,20 +78,20 @@ function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
   ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = ring;
-  ctx.lineWidth = 2;
+  ctx.lineWidth = 2.5;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 1.3, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  const labelFs = Math.max(10, vmin * 0.019);
+  const labelFs = Math.max(12, vmin * 0.028);
   ctx.fillStyle = 'rgba(200,255,220,0.92)';
-  ctx.font = `700 ${labelFs}px ${FONT}`;
+  ctx.font = `800 ${labelFs}px ${FONT}`;
   ctx.textAlign = 'center';
   const label = threat === 0 ? 'SAFE' : threat === 1 ? 'CAUTION' : 'DANGER';
-  ctx.fillText(label, cx, cy + r * 2.35);
+  ctx.fillText(label, cx, cy + r * 2.15 + labelFs * 0.35);
 }
 
 function drawRadarSquare(ctx, x, y, size, ui) {
@@ -143,14 +143,32 @@ function drawRadarSquare(ctx, x, y, size, ui) {
   ctx.fillText(`LEFT ${ui.asteroidCount}`, x + size / 2, y + size - footerBand * 0.4);
 }
 
+function canopyMuteFrame(w, h) {
+  return {
+    x: CANOPY_CENTER.left * w,
+    y: CANOPY_CENTER.top * h,
+    w: (CANOPY_CENTER.right - CANOPY_CENTER.left) * w,
+    h: (CANOPY_CENTER.bottom - CANOPY_CENTER.top) * h
+  };
+}
+
+function topCanopyMuteButtonLayout(w, h, vmin) {
+  const f = canopyMuteFrame(w, h);
+  const btnGap = Math.max(5, f.w * 0.07);
+  const btnSize = Math.min((f.w - btnGap) / 2.15, f.h * 0.78, vmin * 0.055);
+  const total = btnSize * 2 + btnGap;
+  const left0 = w * 0.5 - total / 2;
+  const top = f.y + (f.h - btnSize) / 2;
+  return {
+    musicMute: { left: left0, top, width: btnSize, height: btnSize },
+    sfxMute: { left: left0 + btnSize + btnGap, top, width: btnSize, height: btnSize }
+  };
+}
+
 function panelLines(ui) {
   return {
     status: [`SCORE ${ui.score}`, `LV ${ui.level}`, `LIVES ${ui.lives}`],
-    timer: [
-      formatTime(ui.timeLeft),
-      ui.musicMuted ? 'MUSIC OFF' : 'MUSIC ON',
-      ui.sfxMuted ? 'SFX OFF' : 'SFX ON'
-    ]
+    timer: [formatTime(ui.timeLeft)]
   };
 }
 
@@ -162,9 +180,9 @@ function consoleLayout(ctx, w, h, ui) {
   const m2 = measureTextBox(ctx, 'TIMER', lines.timer, vmin);
   const panelW = Math.max(m1.w, m2.w);
   const panelH = Math.max(m1.h, m2.h);
-  const beaconHalf = vmin * 0.075;
+  const beaconHalf = vmin * 0.11;
   const innerGap = vmin * 0.022;
-  const rowY = h * CONSOLE_TOP + h * 0.02;
+  const rowY = h * CONSOLE_TOP - panelH * 0.12;
   const statusX = w * 0.5 - beaconHalf - innerGap - panelW;
   const timerX = w * 0.5 + beaconHalf + innerGap;
   const radarSize = Math.min(vmin * 0.24, w * 0.26, h * 0.22);
@@ -192,20 +210,16 @@ export function cockpitControlLayout(w, h, ui) {
   const cctx = canvas?.getContext('2d');
   if (!cctx || !ui) {
     const vmin = Math.min(w, h);
-    const pw = vmin * 0.14;
-    const ph = vmin * 0.1;
-    const tx = w * 0.58;
+    const mute = topCanopyMuteButtonLayout(w, h, vmin);
     return {
-      musicMute: { left: tx, top: h * 0.82, width: pw / 2, height: ph },
-      sfxMute: { left: tx + pw / 2, top: h * 0.82, width: pw / 2, height: ph },
-      recenter: { left: w * 0.28, top: h * 0.82, width: pw, height: ph }
+      ...mute,
+      recenter: { left: w * 0.28, top: h * 0.84, width: vmin * 0.14, height: vmin * 0.1 }
     };
   }
   const L = consoleLayout(cctx, w, h, ui);
-  const halfW = L.panelW / 2;
+  const mute = topCanopyMuteButtonLayout(w, h, L.vmin);
   return {
-    musicMute: { left: L.timerX, top: L.rowY, width: halfW, height: L.panelH },
-    sfxMute: { left: L.timerX + halfW, top: L.rowY, width: halfW, height: L.panelH },
+    ...mute,
     recenter: { left: L.statusX, top: L.rowY, width: L.panelW, height: L.panelH }
   };
 }
