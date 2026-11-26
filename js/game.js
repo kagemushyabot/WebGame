@@ -8,6 +8,12 @@ import {
 } from './entities.js';
 import { WORLD } from './world.js';
 import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
+import {
+  isPortraitBlocked,
+  setupOrientationGate,
+  requestGameFullscreen,
+  exitGameFullscreen
+} from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
 
@@ -29,6 +35,10 @@ const padLook = document.getElementById('padLook');
 const padFire = document.getElementById('padFire');
 const levelFlash = document.getElementById('levelFlash');
 const pauseHint = document.getElementById('pauseHint');
+const gameContainer = document.getElementById('game-container');
+const orientationLock = document.getElementById('orientationLock');
+
+setupOrientationGate(orientationLock);
 
 let width, height, dpr;
 let cxCanvas, cyCanvas;
@@ -203,6 +213,7 @@ setupFirePad();
 function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
+  exitGameFullscreen();
   audio.playThrustStop();
   pauseHint?.classList.remove('hidden');
   setTimeout(() => pauseHint?.classList.add('hidden'), 1400);
@@ -275,9 +286,11 @@ function initLevel(clearFlash = false) {
 }
 
 function startGame() {
+  if (isPortraitBlocked()) return;
   readDifficulty();
   audio.init();
   audio.resume();
+  requestGameFullscreen(gameContainer);
   state = 'PLAYING';
   score = 0;
   lives = 3;
@@ -807,6 +820,10 @@ function draw() {
 
 function loop() {
   if (state !== 'PLAYING') return;
+  if (isPortraitBlocked()) {
+    requestAnimationFrame(loop);
+    return;
+  }
   frame++;
   if (fireCooldown > 0) fireCooldown--;
   if (hyperspaceCooldown > 0) {

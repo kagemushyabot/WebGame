@@ -7,6 +7,14 @@
 <link rel="stylesheet" href="css/game.css">
 </head>
 <body>
+<div id="orientationLock" class="orientation-lock hidden" role="alert" aria-live="polite">
+  <div class="orientation-lock__card">
+    <p class="orientation-lock__icon" aria-hidden="true">↻</p>
+    <h2>横向きでプレイしてください</h2>
+    <p>このゲームはランドスケープ（横画面）専用です。<br>端末を回転してください。</p>
+  </div>
+</div>
+
 <div id="game-container">
   <canvas id="game"></canvas>
 

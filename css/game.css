@@ -90,3 +90,45 @@ button.start:active { transform: scale(0.95); background: #2a5fcc; }
 .level-flash.show { opacity: 1; }
 
 .hidden { display: none !important; }
+
+.orientation-lock {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(4, 6, 12, 0.94);
+  backdrop-filter: blur(14px);
+  text-align: center;
+  pointer-events: auto;
+}
+.orientation-lock__card {
+  max-width: 92vw;
+  padding: clamp(24px, 6vh, 40px) clamp(20px, 8vw, 36px);
+  border-radius: 20px;
+  border: 1px solid rgba(120, 165, 255, 0.35);
+  background: rgba(8, 10, 22, 0.92);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+}
+.orientation-lock__icon {
+  font-size: clamp(48px, 14vw, 72px);
+  line-height: 1;
+  margin-bottom: 12px;
+  color: #3c78ff;
+  transform: rotate(90deg);
+  text-shadow: 0 0 20px rgba(60, 120, 255, 0.6);
+}
+.orientation-lock h2 {
+  font-size: clamp(20px, 5.5vw, 28px);
+  letter-spacing: 2px;
+  color: #e8e8f0;
+  margin-bottom: 12px;
+  font-weight: 800;
+}
+.orientation-lock p {
+  font-size: clamp(14px, 4vw, 18px);
+  line-height: 1.6;
+  color: rgba(232, 232, 240, 0.8);
+}
