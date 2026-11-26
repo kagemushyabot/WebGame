@@ -1,6 +1,11 @@
 let portraitOverlayActive = false;
 let playGuardsBound = false;
 let singleTouchOnControl = false;
+let viewportSyncBound = false;
+let layoutRefreshCallback = null;
+let refreshTimers = [];
+let gameContainerRef = null;
+let wasPortraitBlocked = false;
 
 const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnClose, #btnMute, #btnRecenter, .topbar';
 
@@ -34,10 +39,72 @@ export function isGameplayOrientationBlocked() {
   return portraitOverlayActive;
 }
 
+export function setLayoutRefreshHandler(fn) {
+  layoutRefreshCallback = fn;
+}
+
+export function syncViewportSize() {
+  const vv = window.visualViewport;
+  const vh = vv?.height ?? window.innerHeight;
+  const vw = vv?.width ?? window.innerWidth;
+  document.documentElement.style.setProperty('--app-vh', `${vh}px`);
+  document.documentElement.style.setProperty('--app-vw', `${vw}px`);
+}
+
+/** @deprecated use syncViewportSize */
+export function syncViewportHeight() {
+  syncViewportSize();
+}
+
+function onViewportResizeForSync() {
+  syncViewportSize();
+}
+
+function bindViewportSyncListener() {
+  if (viewportSyncBound) return;
+  viewportSyncBound = true;
+  window.visualViewport?.addEventListener('resize', onViewportResizeForSync);
+}
+
+function unbindViewportSyncListener() {
+  if (!viewportSyncBound) return;
+  viewportSyncBound = false;
+  window.visualViewport?.removeEventListener('resize', onViewportResizeForSync);
+}
+
+export function scheduleLayoutRefresh() {
+  syncViewportSize();
+  if (!layoutRefreshCallback) return;
+  for (const id of refreshTimers) clearTimeout(id);
+  refreshTimers = [];
+  const delays = [0, 150, 350];
+  for (const ms of delays) {
+    refreshTimers.push(setTimeout(() => {
+      syncViewportSize();
+      layoutRefreshCallback();
+    }, ms));
+  }
+}
+
+function tryRequestFullscreenOnLandscapeReturn() {
+  if (!document.documentElement.classList.contains('fs-requested')) return;
+  if (isPortraitBlocked()) return;
+  if (isFullscreenActive()) {
+    tryOrientationLock();
+    return;
+  }
+  if (gameContainerRef) requestGameFullscreen(gameContainerRef);
+}
+
 export function setupOrientationGate(overlayEl) {
   function refresh() {
+    wasPortraitBlocked = portraitOverlayActive;
     portraitOverlayActive = isPortraitBlocked();
     if (overlayEl) overlayEl.classList.toggle('hidden', !portraitOverlayActive);
+    scheduleLayoutRefresh();
+    if (wasPortraitBlocked && !portraitOverlayActive) {
+      tryRequestFullscreenOnLandscapeReturn();
+    }
   }
   refresh();
   window.addEventListener('resize', refresh);
@@ -69,28 +136,25 @@ function isFullscreenActive() {
   );
 }
 
-export function syncViewportHeight() {
-  const vh = window.visualViewport?.height ?? window.innerHeight;
-  document.documentElement.style.setProperty('--app-vh', `${vh}px`);
-}
-
 export function applyImmersiveMode(on) {
   document.documentElement.classList.toggle('immersive-mode', on);
   if (on) {
-    syncViewportHeight();
-    window.visualViewport?.addEventListener('resize', syncViewportHeight);
+    syncViewportSize();
+    bindViewportSyncListener();
     if (isMobileDevice()) {
       requestAnimationFrame(() => {
         window.scrollTo(0, 1);
         requestAnimationFrame(() => {
           window.scrollTo(0, 0);
-          syncViewportHeight();
+          syncViewportSize();
         });
       });
     }
   } else {
-    window.visualViewport?.removeEventListener('resize', syncViewportHeight);
+    unbindViewportSyncListener();
     document.documentElement.style.removeProperty('--app-vh');
+    document.documentElement.style.removeProperty('--app-vw');
+    syncViewportSize();
   }
 }
 
@@ -115,9 +179,11 @@ function invokeRequestFullscreen(el) {
 function onFullscreenDone() {
   tryOrientationLock();
   applyImmersiveMode(true);
+  scheduleLayoutRefresh();
 }
 
 export function requestGameFullscreen(container) {
+  gameContainerRef = container || gameContainerRef;
   applyImmersiveMode(true);
   document.documentElement.classList.add('fs-requested');
 
@@ -136,7 +202,7 @@ export function requestGameFullscreen(container) {
     const p = invokeRequestFullscreen(el);
     if (p == null) continue;
     if (typeof p.then === 'function') {
-      p.then(onFullscreenDone).catch(() => {});
+      p.then(onFullscreenDone).catch(() => scheduleLayoutRefresh());
     } else {
       onFullscreenDone();
     }
@@ -145,14 +211,16 @@ export function requestGameFullscreen(container) {
 }
 
 export function bindFullscreenMaintenance(container) {
+  gameContainerRef = container;
   const retry = () => {
-    if (!document.documentElement.classList.contains('game-playing')) return;
+    if (!document.documentElement.classList.contains('fs-requested')) return;
+    if (isPortraitBlocked()) return;
     if (isFullscreenActive()) return;
     requestGameFullscreen(container);
   };
   document.addEventListener('fullscreenchange', () => {
     if (isFullscreenActive()) onFullscreenDone();
-    else if (document.documentElement.classList.contains('fs-requested')) retry();
+    else retry();
   });
   document.addEventListener('webkitfullscreenchange', retry);
 }
@@ -165,8 +233,13 @@ export function exitGameFullscreen() {
     document.webkitExitFullscreen?.bind(document) ||
     document.mozCancelFullScreen?.bind(document) ||
     document.msExitFullscreen?.bind(document);
-  if (exit && isFullscreenActive()) exit().catch(() => {});
+  if (exit && isFullscreenActive()) {
+    exit().then(() => syncViewportSize()).catch(() => syncViewportSize());
+  } else {
+    syncViewportSize();
+  }
   screen.orientation?.unlock?.();
+  scheduleLayoutRefresh();
 }
 
 function touchAllowedTarget(target) {
@@ -244,4 +317,5 @@ export function setPlaySessionActive(active) {
     unbindPlayTouchGuards();
     singleTouchOnControl = false;
   }
+  if (active) scheduleLayoutRefresh();
 }

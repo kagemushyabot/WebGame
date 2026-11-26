@@ -18,7 +18,9 @@ import {
   exitGameFullscreen,
   setPlaySessionActive,
   bindFullscreenMaintenance,
-  syncViewportHeight
+  syncViewportSize,
+  scheduleLayoutRefresh,
+  setLayoutRefreshHandler
 } from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
@@ -47,6 +49,12 @@ const pauseHint = document.getElementById('pauseHint');
 const gameContainer = document.getElementById('game-container');
 const orientationLock = document.getElementById('orientationLock');
 
+setLayoutRefreshHandler(() => {
+  resize();
+  layoutCockpitControls();
+  if (state === 'PLAYING' && !isGameplayOrientationBlocked()) draw();
+});
+syncViewportSize();
 setupOrientationGate(orientationLock);
 bindFullscreenMaintenance(gameContainer);
 
@@ -86,7 +94,7 @@ function layoutCockpitControls() {
   apply(btnRecenter, L.recenter);
   apply(btnMute, L.audio);
 }
-window.addEventListener('resize', () => { resize(); syncViewportHeight(); layoutCockpitControls(); });
+window.addEventListener('resize', () => scheduleLayoutRefresh());
 resize();
 
 let beta = 0, gamma = 0;
