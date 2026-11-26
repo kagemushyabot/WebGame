@@ -40,7 +40,8 @@ const goHiScoreEl = document.getElementById('goHiScore');
 const btnStart = document.getElementById('btnStart');
 const btnRestart = document.getElementById('btnRestart');
 const btnRecenter = document.getElementById('btnRecenter');
-const btnMute = document.getElementById('btnMute');
+const btnMuteMusic = document.getElementById('btnMuteMusic');
+const btnMuteSfx = document.getElementById('btnMuteSfx');
 const btnClose = document.getElementById('btnClose');
 const padLook = document.getElementById('padLook');
 const padFire = document.getElementById('padFire');
@@ -81,7 +82,8 @@ function layoutCockpitControls() {
     level,
     lives,
     timeLeft: getLevelTimeLeftSec(),
-    muted: audio.muted
+    musicMuted: audio.musicMuted,
+    sfxMuted: audio.sfxMuted
   });
   const apply = (el, box) => {
     if (!el || !box) return;
@@ -92,8 +94,23 @@ function layoutCockpitControls() {
     el.style.right = 'auto';
   };
   apply(btnRecenter, L.recenter);
-  apply(btnMute, L.audio);
+  apply(btnMuteMusic, L.musicMute);
+  apply(btnMuteSfx, L.sfxMute);
 }
+
+function updateMuteButtons() {
+  if (btnMuteMusic) {
+    btnMuteMusic.textContent = audio.musicMuted ? 'M×' : '♫';
+    btnMuteMusic.classList.toggle('is-off', audio.musicMuted);
+    btnMuteMusic.title = audio.musicMuted ? 'Music off' : 'Music on';
+  }
+  if (btnMuteSfx) {
+    btnMuteSfx.textContent = audio.sfxMuted ? 'FX×' : 'FX';
+    btnMuteSfx.classList.toggle('is-off', audio.sfxMuted);
+    btnMuteSfx.title = audio.sfxMuted ? 'Effects off' : 'Effects on';
+  }
+}
+updateMuteButtons();
 window.addEventListener('resize', () => scheduleLayoutRefresh());
 resize();
 
@@ -298,6 +315,7 @@ function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
   setPlaySessionActive(false);
+  audio.stopBgm();
   document.documentElement.classList.remove('cockpit-ui');
   exitGameFullscreen();
   audio.playThrustStop();
@@ -312,9 +330,13 @@ btnRecenter.addEventListener('click', () => {
   ship.pitch = 0;
 });
 btnClose?.addEventListener('click', () => exitToMenu());
-btnMute.addEventListener('click', () => {
-  audio.setMute(!audio.muted);
-  btnMute.textContent = audio.muted ? '🔇' : '🔊';
+btnMuteMusic?.addEventListener('click', () => {
+  audio.setMusicMute(!audio.musicMuted);
+  updateMuteButtons();
+});
+btnMuteSfx?.addEventListener('click', () => {
+  audio.setSfxMute(!audio.sfxMuted);
+  updateMuteButtons();
 });
 btnStart.addEventListener('click', startGame);
 btnRestart.addEventListener('click', resetGame);
@@ -417,6 +439,7 @@ function startGame() {
   readDifficulty();
   audio.init();
   audio.resume();
+  audio.startBgm();
   state = 'PLAYING';
   score = 0;
   lives = 3;
@@ -445,6 +468,7 @@ function startGame() {
 function gameOverScreen() {
   state = 'GAMEOVER';
   setPlaySessionActive(false);
+  audio.stopBgm();
   document.documentElement.classList.remove('cockpit-ui');
   saveHiScore();
   goScoreEl.textContent = score;
@@ -1149,7 +1173,8 @@ function draw() {
       shipYaw: ship.yaw,
       threat: computeThreatLevel(),
       frame,
-      muted: audio.muted,
+      musicMuted: audio.musicMuted,
+      sfxMuted: audio.sfxMuted,
       radarRange: WORLD.bound * 0.92
     });
     drawViewportHud();

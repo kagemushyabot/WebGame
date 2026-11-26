@@ -146,7 +146,11 @@ function drawRadarSquare(ctx, x, y, size, ui) {
 function panelLines(ui) {
   return {
     status: [`SCORE ${ui.score}`, `LV ${ui.level}`, `LIVES ${ui.lives}`],
-    timer: [formatTime(ui.timeLeft), ui.muted ? 'AUDIO OFF' : 'AUDIO ON']
+    timer: [
+      formatTime(ui.timeLeft),
+      ui.musicMuted ? 'MUSIC OFF' : 'MUSIC ON',
+      ui.sfxMuted ? 'SFX OFF' : 'SFX ON'
+    ]
   };
 }
 
@@ -188,14 +192,20 @@ export function cockpitControlLayout(w, h, ui) {
   const cctx = canvas?.getContext('2d');
   if (!cctx || !ui) {
     const vmin = Math.min(w, h);
+    const pw = vmin * 0.14;
+    const ph = vmin * 0.1;
+    const tx = w * 0.58;
     return {
-      audio: { left: w * 0.58, top: h * 0.82, width: vmin * 0.14, height: vmin * 0.1 },
-      recenter: { left: w * 0.28, top: h * 0.82, width: vmin * 0.14, height: vmin * 0.1 }
+      musicMute: { left: tx, top: h * 0.82, width: pw / 2, height: ph },
+      sfxMute: { left: tx + pw / 2, top: h * 0.82, width: pw / 2, height: ph },
+      recenter: { left: w * 0.28, top: h * 0.82, width: pw, height: ph }
     };
   }
   const L = consoleLayout(cctx, w, h, ui);
+  const halfW = L.panelW / 2;
   return {
-    audio: { left: L.timerX, top: L.rowY, width: L.panelW, height: L.panelH },
+    musicMute: { left: L.timerX, top: L.rowY, width: halfW, height: L.panelH },
+    sfxMute: { left: L.timerX + halfW, top: L.rowY, width: halfW, height: L.panelH },
     recenter: { left: L.statusX, top: L.rowY, width: L.panelW, height: L.panelH }
   };
 }

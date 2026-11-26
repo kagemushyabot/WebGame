@@ -31,7 +31,8 @@
     <button type="button" class="btn-close-game" id="btnClose" title="Close game" aria-label="Close game">✕</button>
     <div class="topbar">
       <button type="button" class="icon-btn cockpit-hit" id="btnRecenter" title="Reset aim" aria-label="Reset aim">↻</button>
-      <button type="button" class="icon-btn cockpit-hit" id="btnMute" title="Toggle mute" aria-label="Toggle mute">🔊</button>
+      <button type="button" class="icon-btn mute-toggle cockpit-hit" id="btnMuteMusic" title="Toggle music" aria-label="Toggle music">♫</button>
+      <button type="button" class="icon-btn mute-toggle cockpit-hit" id="btnMuteSfx" title="Toggle sound effects" aria-label="Toggle sound effects">FX</button>
     </div>
 
     <button type="button" class="touch-pad touch-pad--look" id="padLook" aria-label="Drag to look, tap to warp">
@@ -53,10 +54,13 @@
     <div class="card">
       <h1>ASTEROIDS 3D</h1>
       <p>Fly from the cockpit<br>Drag lower-left to aim · tap there to warp</p>
-      <div class="hint">Tap lower-right to fire · Esc / ✕ to quit · 🔇 mute</div>
-      <div class="hint">Orange=chain · Cyan=bounce · Pink=balloon · Purple=magnet · Pale=comet</div>
-      <div class="hint">Each level: 60s timer — leftover asteroids reduce your score</div>
-      <div class="hint">iPhone: Add to Home Screen for the most immersive fullscreen</div>
+      <p class="hint hint--tight">Fire: lower-right · Look/warp: lower-left · ✕ or Esc to quit</p>
+      <details class="legend">
+        <summary>Asteroid types &amp; tips</summary>
+        <p class="hint">Orange=chain · Cyan=bounce · Pink=balloon · Purple=magnet · Pale=comet</p>
+        <p class="hint">60s per level — leftover rocks reduce score</p>
+        <p class="hint">iPhone: Add to Home Screen for best fullscreen</p>
+      </details>
       <div class="difficulty">
         <label><input type="radio" name="diff" value="easy"> Easy</label>
         <label><input type="radio" name="diff" value="normal" checked> Normal</label>

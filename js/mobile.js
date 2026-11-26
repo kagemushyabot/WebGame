@@ -7,7 +7,7 @@ let refreshTimers = [];
 let gameContainerRef = null;
 let wasPortraitBlocked = false;
 
-const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnClose, #btnMute, #btnRecenter, .topbar';
+const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnClose, #btnMuteMusic, #btnMuteSfx, #btnRecenter, .topbar';
 
 export function isMobileDevice() {
   if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
