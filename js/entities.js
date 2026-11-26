@@ -118,7 +118,41 @@ function makeRockWire(baseR) {
   return { verts, edges, boundsR: maxR };
 }
 
-export function spawnAsteroid(size, speedMul, ox, oy, oz, vx, vy, vz) {
+/** Visual + behavior ids (logic in game.js). */
+export const ASTEROID_KINDS = {
+  rock: { color: [120, 195, 105], score: { 1: 100, 2: 50, 3: 20 } },
+  chain: { color: [255, 145, 75], score: { 1: 120, 2: 80, 3: 35 } },
+  rubber: { color: [90, 215, 255], score: { 1: 110, 2: 60, 3: 25 } },
+  balloon: { color: [255, 130, 210], score: { 1: 150, 2: 90, 3: 40 } },
+  comet: { color: [175, 210, 255], score: { 1: 130, 2: 70, 3: 30 } },
+  magnet: { color: [180, 120, 255], score: { 1: 140, 2: 75, 3: 32 } }
+};
+
+const KIND_WEIGHTS = [
+  { kind: 'rock', w: 38 },
+  { kind: 'chain', w: 14 },
+  { kind: 'rubber', w: 14 },
+  { kind: 'balloon', w: 12 },
+  { kind: 'comet', w: 11 },
+  { kind: 'magnet', w: 11 }
+];
+
+export function pickAsteroidKind(size) {
+  if (size <= 1) return 'rock';
+  let t = rand(0, 100);
+  for (const { kind, w } of KIND_WEIGHTS) {
+    t -= w;
+    if (t <= 0) return kind;
+  }
+  return 'rock';
+}
+
+export function asteroidScore(kind, size) {
+  const k = ASTEROID_KINDS[kind] || ASTEROID_KINDS.rock;
+  return k.score[size] ?? k.score[3] ?? 20;
+}
+
+export function spawnAsteroid(size, speedMul, ox, oy, oz, vx, vy, vz, kindHint) {
   let x, y, z;
   if (ox !== undefined) { x = ox; y = oy; z = oz; }
   else {
@@ -143,29 +177,60 @@ export function spawnAsteroid(size, speedMul, ox, oy, oz, vx, vy, vz) {
     vy += (-y / d) * pull * 0.4;
     vz += (-z / d) * pull;
   }
-  const baseR = size * WORLD.astRadiusPerSize;
+  const kind = kindHint || pickAsteroidKind(size);
+  const baseR = size * WORLD.astRadiusPerSize * (kind === 'balloon' ? 0.92 : 1);
   const wire = makeRockWire(baseR);
-  return {
+  let ivx = vx, ivy = vy, ivz = vz;
+  if (kind === 'comet') {
+    const sp = Math.sqrt(ivx * ivx + ivy * ivy + ivz * ivz) || 0.1;
+    const mul = 1.55 / sp;
+    ivx *= mul;
+    ivy *= mul;
+    ivz *= mul;
+  }
+  const ast = {
     x, y, z,
-    vx, vy, vz,
+    vx: ivx, vy: ivy, vz: ivz,
     size,
+    kind,
     wire,
+    swell: 1,
+    hits: 0,
     angleY: rand(0, Math.PI * 2),
     angleX: rand(0, Math.PI * 2),
-    angleVelY: rand(-1, 1) * 0.0035,
+    angleVelY: rand(-1, 1) * (kind === 'balloon' ? 0.002 : 0.0035),
     angleVelX: rand(-1, 1) * 0.0025,
     angleVelZ: rand(-1, 1) * 0.002,
     radius: wire.boundsR
   };
+  return ast;
 }
 
 export function splitAsteroid(ast, speedMul) {
   if (ast.size <= 1) return [];
   const s2 = ast.size - 1;
+  const childKind = ast.kind === 'comet' ? 'comet' : 'rock';
   return [
-    spawnAsteroid(s2, speedMul, ast.x, ast.y, ast.z, ast.vx * 1.15 + rand(-1, 1) * 0.06, ast.vy, ast.vz * 1.15 + rand(-1, 1) * 0.06),
-    spawnAsteroid(s2, speedMul, ast.x, ast.y, ast.z, ast.vx * 1.15 - rand(-1, 1) * 0.06, ast.vy, ast.vz * 1.15 - rand(-1, 1) * 0.06)
+    spawnAsteroid(s2, speedMul, ast.x, ast.y, ast.z, ast.vx * 1.15 + rand(-1, 1) * 0.06, ast.vy, ast.vz * 1.15 + rand(-1, 1) * 0.06, childKind),
+    spawnAsteroid(s2, speedMul, ast.x, ast.y, ast.z, ast.vx * 1.15 - rand(-1, 1) * 0.06, ast.vy, ast.vz * 1.15 - rand(-1, 1) * 0.06, childKind)
   ];
+}
+
+/** Comet shatters into three fast pebbles. */
+export function splitComet(ast, speedMul) {
+  if (ast.size <= 1) return [];
+  const s2 = Math.max(1, ast.size - 1);
+  const out = [];
+  for (let i = 0; i < 3; i++) {
+    const a = rand(0, Math.PI * 2);
+    const sp = 0.22 * speedMul;
+    out.push(spawnAsteroid(
+      s2, speedMul, ast.x, ast.y, ast.z,
+      ast.vx + Math.cos(a) * sp, ast.vy + rand(-0.08, 0.08),
+      ast.vz + Math.sin(a) * sp, 'comet'
+    ));
+  }
+  return out;
 }
 
 export function spawnUfo(speedMul) {

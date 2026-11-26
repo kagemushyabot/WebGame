@@ -4,7 +4,8 @@ import {
 } from './math3d.js';
 import {
   DIFFICULTY, UFO_VERTS, UFO_EDGES,
-  newShip, spawnAsteroid, splitAsteroid, spawnUfo
+  newShip, spawnAsteroid, splitAsteroid, splitComet, spawnUfo,
+  ASTEROID_KINDS, asteroidScore
 } from './entities.js';
 import { WORLD } from './world.js';
 import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
@@ -472,9 +473,198 @@ function updateUfos() {
   }
 }
 
+function asteroidRadius(a) {
+  return a.wire.boundsR * (a.swell || 1);
+}
+
+function syncAsteroidRadius(a) {
+  a.radius = asteroidRadius(a);
+}
+
+function kindColor(a) {
+  return (ASTEROID_KINDS[a.kind] || ASTEROID_KINDS.rock).color;
+}
+
+function resolveAsteroidCollisions() {
+  for (let i = 0; i < asteroids.length; i++) {
+    for (let j = i + 1; j < asteroids.length; j++) {
+      const a = asteroids[i];
+      const b = asteroids[j];
+      const ra = asteroidRadius(a);
+      const rb = asteroidRadius(b);
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const dz = b.z - a.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const minD = ra + rb;
+      if (d >= minD || d < 0.01) continue;
+      const nx = dx / d;
+      const ny = dy / d;
+      const nz = dz / d;
+      const overlap = (minD - d) * 0.5;
+      a.x -= nx * overlap;
+      a.y -= ny * overlap;
+      a.z -= nz * overlap;
+      b.x += nx * overlap;
+      b.y += ny * overlap;
+      b.z += nz * overlap;
+      const bounce = a.kind === 'rubber' || b.kind === 'rubber';
+      if (!bounce) continue;
+      const rvx = b.vx - a.vx;
+      const rvy = b.vy - a.vy;
+      const rvz = b.vz - a.vz;
+      const vn = rvx * nx + rvy * ny + rvz * nz;
+      if (vn >= 0) continue;
+      const rest = 0.88;
+      const imp = -(1 + rest) * vn * 0.5;
+      a.vx -= imp * nx;
+      a.vy -= imp * ny;
+      a.vz -= imp * nz;
+      b.vx += imp * nx;
+      b.vy += imp * ny;
+      b.vz += imp * nz;
+    }
+  }
+}
+
+function applyBlastToAsteroid(o, cx, cy, cz, diff, depth) {
+  const d = dist3(cx, cy, cz, o.x, o.y, o.z) || 1;
+  const falloff = clamp(1.2 - d / 130, 0.2, 1);
+  o.vx += ((o.x - cx) / d) * 0.38 * falloff;
+  o.vy += ((o.y - cy) / d) * 0.18 * falloff;
+  o.vz += ((o.z - cz) / d) * 0.38 * falloff;
+  if (o.kind === 'balloon') {
+    o.hits++;
+    o.swell = (o.swell || 1) + 0.22 * falloff;
+    syncAsteroidRadius(o);
+    if (o.swell >= 2.05 || o.hits >= 4) popBalloonAt(o, diff, true);
+    return;
+  }
+  if (o.kind === 'chain' && depth < 3 && Math.random() < 0.5 * falloff) {
+    const idx = asteroids.indexOf(o);
+    if (idx >= 0) {
+      explodeChainAt(o, diff, depth);
+      asteroids.splice(idx, 1);
+    }
+    return;
+  }
+  if (o.size <= 1 && Math.random() < 0.6 * falloff) {
+    addScore(asteroidScore(o.kind, o.size));
+    addParticle(o.x, o.y, o.z, '#ffffff', 8, 2.5);
+    const idx = asteroids.indexOf(o);
+    if (idx >= 0) asteroids.splice(idx, 1);
+  }
+}
+
+function explodeChainAt(ast, diff, depth = 0) {
+  addScore(asteroidScore(ast.kind, ast.size));
+  audio.playExplosion(ast.size);
+  addParticle(ast.x, ast.y, ast.z, '#ffaa55', ast.size === 1 ? 16 : 26, ast.size === 1 ? 3.5 : 5);
+  addParticle(ast.x, ast.y, ast.z, '#ff6622', 10, 4);
+  const R = 78 + ast.size * 30;
+  const { x: cx, y: cy, z: cz } = ast;
+  for (const o of [...asteroids]) {
+    if (o === ast) continue;
+    if (dist3(cx, cy, cz, o.x, o.y, o.z) < R + asteroidRadius(o)) {
+      applyBlastToAsteroid(o, cx, cy, cz, diff, depth + 1);
+    }
+  }
+}
+
+function popBalloonAt(ast, diff, awardScore = true) {
+  if (awardScore) {
+    addScore(asteroidScore(ast.kind, ast.size));
+    audio.playExplosion(ast.size);
+  }
+  addParticle(ast.x, ast.y, ast.z, '#ff88cc', 30, 6);
+  addParticle(ast.x, ast.y, ast.z, '#ffffff', 14, 3);
+  const idx = asteroids.indexOf(ast);
+  if (idx >= 0) asteroids.splice(idx, 1);
+  for (const o of asteroids) {
+    const d = dist3(ast.x, ast.y, ast.z, o.x, o.y, o.z);
+    if (d < 65 + asteroidRadius(o)) {
+      const inv = 1 / (d || 1);
+      o.vx += (o.x - ast.x) * inv * 0.28;
+      o.vy += (o.y - ast.y) * inv * 0.12;
+      o.vz += (o.z - ast.z) * inv * 0.28;
+    }
+  }
+}
+
+function destroyAsteroidStandard(a, ai, diff) {
+  addScore(asteroidScore(a.kind, a.size));
+  audio.playExplosion(a.size);
+  let children = [];
+  if (a.kind === 'comet') children = splitComet(a, diff.speedMul);
+  else children = splitAsteroid(a, diff.speedMul);
+  addParticle(a.x, a.y, a.z, '#ffffff', a.size === 1 ? 6 : a.size === 2 ? 12 : 18, a.size === 1 ? 2 : 3);
+  asteroids.splice(ai, 1);
+  asteroids.push(...children);
+}
+
+function magnetPulse(ax, ay, az) {
+  for (const o of asteroids) {
+    const d = dist3(ax, ay, az, o.x, o.y, o.z);
+    if (d > 150 || d < 1) continue;
+    const pull = 0.22 / d;
+    o.vx -= o.x * pull * 0.15;
+    o.vy -= o.y * pull * 0.08;
+    o.vz -= o.z * pull * 0.15;
+  }
+}
+
+function handleBulletAsteroidHit(a, ai, diff) {
+  if (a.kind === 'balloon') {
+    a.hits++;
+    a.swell = (a.swell || 1) + 0.13;
+    syncAsteroidRadius(a);
+    addParticle(a.x, a.y, a.z, '#ffaadd', 5, 1.2);
+    if (a.swell >= 2.08 || a.hits >= 6) popBalloonAt(a, diff);
+    return;
+  }
+  if (a.kind === 'chain') {
+    explodeChainAt(a, diff);
+    asteroids.splice(ai, 1);
+    return;
+  }
+  if (a.kind === 'rubber') {
+    addScore(asteroidScore(a.kind, a.size));
+    audio.playExplosion(a.size);
+    addParticle(a.x, a.y, a.z, '#aaf0ff', 12, 3);
+    const children = splitAsteroid(a, diff.speedMul);
+    for (const c of children) {
+      c.kind = 'rubber';
+      c.vx *= 1.3;
+      c.vz *= 1.3;
+    }
+    asteroids.splice(ai, 1);
+    asteroids.push(...children);
+    return;
+  }
+  if (a.kind === 'magnet') {
+    addScore(asteroidScore(a.kind, a.size));
+    audio.playExplosion(a.size);
+    addParticle(a.x, a.y, a.z, '#c9a0ff', 18, 4);
+    const children = splitAsteroid(a, diff.speedMul);
+    asteroids.splice(ai, 1);
+    asteroids.push(...children);
+    magnetPulse(a.x, a.y, a.z);
+    return;
+  }
+  destroyAsteroidStandard(a, ai, diff);
+}
+
 function moveEnvironment() {
   updateUfos();
   for (const a of asteroids) {
+    if (a.kind === 'magnet') {
+      const d = dist3(a.x, a.y, a.z, 0, 0, 0) || 1;
+      if (d < 240) {
+        a.vx -= (a.x / d) * 0.007;
+        a.vy -= (a.y / d) * 0.0035;
+        a.vz -= (a.z / d) * 0.007;
+      }
+    }
     a.x += a.vx;
     a.y += a.vy;
     a.z += a.vz;
@@ -483,6 +673,7 @@ function moveEnvironment() {
     if (a.angleVelZ) a.angleZ = (a.angleZ || 0) + a.angleVelZ;
     wrapObj(a);
   }
+  resolveAsteroidCollisions();
   for (const u of ufos) {
     u.x += u.vx;
     u.y += u.vy;
@@ -550,15 +741,10 @@ function checkCollisions() {
     let hit = false;
     for (let ai = asteroids.length - 1; ai >= 0; ai--) {
       const a = asteroids[ai];
-      if (dist3(b.x, b.y, b.z, a.x, a.y, a.z) < a.radius + 4) {
+      if (dist3(b.x, b.y, b.z, a.x, a.y, a.z) < asteroidRadius(a) + 4) {
         hit = true;
-        audio.playExplosion(a.size);
-        addScore(a.size === 1 ? 100 : a.size === 2 ? 50 : 20);
         const diff = getDiff();
-        const children = splitAsteroid(a, diff.speedMul);
-        asteroids.splice(ai, 1);
-        asteroids.push(...children);
-        addParticle(a.x, a.y, a.z, '#fff', a.size === 1 ? 6 : a.size === 2 ? 12 : 18, a.size === 1 ? 2 : a.size === 2 ? 3 : 4);
+        handleBulletAsteroidHit(a, ai, diff);
         bullets.splice(bi, 1);
         break;
       }
@@ -578,7 +764,7 @@ function checkCollisions() {
   }
   if (Date.now() >= invulnUntil) {
     for (const a of asteroids) {
-      if (dist3(0, 0, 0, a.x, a.y, a.z) < ship.radius + a.radius * 0.85) {
+      if (dist3(0, 0, 0, a.x, a.y, a.z) < ship.radius + asteroidRadius(a) * 0.85) {
         dieShip();
         return;
       }
@@ -716,8 +902,9 @@ function rotateRockLocal(x, y, z, ay, ax, az) {
 function projectAsteroid(a) {
   const projected = [];
   const az = a.angleZ || 0;
+  const sc = a.swell || 1;
   for (const v of a.wire.verts) {
-    const lr = rotateRockLocal(v.x, v.y, v.z, a.angleY, a.angleX, az);
+    const lr = rotateRockLocal(v.x * sc, v.y * sc, v.z * sc, a.angleY, a.angleX, az);
     const wp = { x: lr.x + a.x, y: lr.y + a.y, z: lr.z + a.z };
     projected.push(project(wp.x, wp.y, wp.z));
   }
@@ -773,7 +960,11 @@ function drawAsteroid(a) {
   const projected = projectAsteroid(a);
   if (projected.every(p => !p)) return;
   fillAsteroidOcclusion(projected);
-  drawWireModel3D(projected, a.wire.edges, [120, 195, 105]);
+  const rgb = kindColor(a);
+  const drawRgb = a.kind === 'balloon'
+    ? rgb.map(c => Math.min(255, Math.floor(c * (0.88 + 0.12 * Math.sin(frame * 0.09 + a.hits)))))
+    : rgb;
+  drawWireModel3D(projected, a.wire.edges, drawRgb);
 }
 
 function drawAsteroidsBackToFront() {
