@@ -196,6 +196,8 @@ html.cockpit-ui .touch-pad__hint {
   border-radius: 50%;
   border: 1px dashed rgba(255, 255, 255, 0.22);
   pointer-events: none;
+  transition: transform 0.05s ease-out;
+  will-change: transform;
 }
 .touch-pad__label {
   font-size: clamp(11px, 3vw, 13px);
