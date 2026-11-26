@@ -149,8 +149,8 @@ let lastLoopAt = 0;
 const LOOK_JOY_MAX_YAW = 0.72;
 const LOOK_JOY_MAX_PITCH = 0.5;
 /** Finger travel (px) from touch origin before a LOOK press counts as aim drag (not warp tap). */
-const LOOK_JOY_DEAD = 14;
-const LOOK_WARP_TAP_MS = 420;
+const LOOK_JOY_DEAD = 28;
+const LOOK_WARP_TAP_MS = 560;
 let warpFx = { t: 0, duration: 48 };
 
 let ship = newShip();
@@ -246,10 +246,10 @@ function updateLookJoystick(clientX, clientY) {
     ox = (ox / dist) * radius;
     oy = (oy / dist) * radius;
   }
-  // Warp vs aim: use travel from finger-down point, not distance from pad center
-  // (edge taps used to mark moved=true immediately and skip warp).
+  // Warp vs aim: travel from finger-down point (not pad center).
   const travel = Math.hypot(clientX - lookPtr.startX, clientY - lookPtr.startY);
-  if (travel > LOOK_JOY_DEAD) lookPtr.moved = true;
+  lookPtr.maxTravel = Math.max(lookPtr.maxTravel, travel);
+  if (lookPtr.maxTravel > LOOK_JOY_DEAD) lookPtr.moved = true;
   lookPtr.yawRate = (ox / radius) * LOOK_JOY_MAX_YAW;
   lookPtr.pitchRate = (oy / radius) * LOOK_JOY_MAX_PITCH;
   lookPtr.knobX = ox;
@@ -269,11 +269,12 @@ function beginLook(clientX, clientY, pointerId) {
     id: pointerId,
     startX: clientX,
     startY: clientY,
+    maxTravel: 0,
     yawRate: 0,
     pitchRate: 0,
     moved: false,
     ended: false,
-    t0: Date.now()
+    t0: performance.now()
   };
   padLook.classList.add('active');
   updateLookJoystick(clientX, clientY);
@@ -284,10 +285,21 @@ function moveLook(clientX, clientY, pointerId) {
   updateLookJoystick(clientX, clientY);
 }
 
+function isLookWarpTap(ptr) {
+  if (!ptr) return false;
+  const duration = performance.now() - ptr.t0;
+  if (duration > LOOK_WARP_TAP_MS) return false;
+  // Normal tap: little travel. Very quick press: allow extra jitter.
+  if (ptr.maxTravel <= LOOK_JOY_DEAD) return true;
+  if (duration < 220 && ptr.maxTravel <= LOOK_JOY_DEAD * 1.75) return true;
+  return false;
+}
+
 function endLook(pointerId) {
   if (!lookPtr || lookPtr.id !== pointerId || lookPtr.ended) return;
   lookPtr.ended = true;
-  const tap = !lookPtr.moved && Date.now() - lookPtr.t0 < LOOK_WARP_TAP_MS;
+  const ptr = lookPtr;
+  const tap = isLookWarpTap(ptr);
   lookPtr = null;
   padLook.classList.remove('active');
   resetLookPadVisual();
@@ -313,8 +325,10 @@ function setupTouchPads() {
   padFire?.addEventListener('contextmenu', blockPadMenu);
   padLook.addEventListener('pointerdown', e => {
     if (state !== 'PLAYING') return;
+    if (e.button != null && e.button !== 0) return;
     e.preventDefault();
-    padLook.setPointerCapture(e.pointerId);
+    e.stopPropagation();
+    try { padLook.setPointerCapture(e.pointerId); } catch { /* noop */ }
     beginLook(e.clientX, e.clientY, e.pointerId);
   });
   padLook.addEventListener('pointermove', e => {
@@ -573,8 +587,16 @@ function shoot() {
 }
 
 function tryHyperspace() {
-  if (state !== 'PLAYING' || ship.dead || hyperspaceCooldown > 0) return;
-  hyperspaceCooldown = 180;
+  if (state !== 'PLAYING' || ship.dead) return;
+  if (hyperspaceCooldown > 0) {
+    // Feedback so a tap during cooldown does not feel like a dead button.
+    if (padLook) {
+      padLook.classList.add('active');
+      setTimeout(() => padLook.classList.remove('active'), 90);
+    }
+    return;
+  }
+  hyperspaceCooldown = 100;
   if (padLook) padLook.classList.add('warp-cool');
   triggerWarpFx();
   const diff = getDiff();
