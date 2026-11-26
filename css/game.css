@@ -1,5 +1,13 @@
 * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
 html, body { width: 100%; height: 100%; overflow: hidden; background: #05070c; color: #e6ebf5; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; touch-action: none; }
+html.game-playing,
+html.game-playing body,
+html.game-playing #game-container,
+html.game-playing canvas#game {
+  touch-action: none;
+  -ms-touch-action: none;
+  overscroll-behavior: none;
+}
 body { height: 100dvh; display: flex; align-items: center; justify-content: center; }
 #game-container { position: relative; width: 100vw; height: 100vh; max-width: 100vw; max-height: 100vh; overflow: hidden; }
 html.immersive-mode,

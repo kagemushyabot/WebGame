@@ -1,4 +1,8 @@
 let portraitOverlayActive = false;
+let playGuardsBound = false;
+let singleTouchOnControl = false;
+
+const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnQuit, #btnMute, #btnRecenter, .topbar';
 
 export function isMobileDevice() {
   if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
@@ -52,11 +56,17 @@ function landscapeMqWatch(refresh) {
 }
 
 function tryOrientationLock() {
+  if (!isMobileDevice()) return;
   screen.orientation?.lock?.('landscape').catch(() => {});
 }
 
 function isFullscreenActive() {
-  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+  return !!(
+    document.fullscreenElement ||
+    document.webkitFullscreenElement ||
+    document.mozFullScreenElement ||
+    document.msFullscreenElement
+  );
 }
 
 export function applyImmersiveMode(on) {
@@ -69,8 +79,25 @@ export function applyImmersiveMode(on) {
   }
 }
 
+function invokeRequestFullscreen(el) {
+  const req =
+    el.requestFullscreen?.bind(el) ||
+    el.webkitRequestFullscreen?.bind(el) ||
+    el.mozRequestFullScreen?.bind(el) ||
+    el.msRequestFullscreen?.bind(el);
+  if (!req) return null;
+  try {
+    return req({ navigationUI: 'hide' });
+  } catch {
+    try {
+      return req();
+    } catch {
+      return null;
+    }
+  }
+}
+
 export function requestGameFullscreen(container) {
-  if (!isMobileDevice()) return;
   applyImmersiveMode(true);
 
   if (isFullscreenActive()) {
@@ -80,28 +107,101 @@ export function requestGameFullscreen(container) {
 
   const targets = [container, document.documentElement, document.body].filter(Boolean);
   for (const el of targets) {
-    const req =
-      el.requestFullscreen?.bind(el) ||
-      el.webkitRequestFullscreen?.bind(el);
-    if (!req) continue;
-    try {
-      const p = req();
-      if (p && typeof p.then === 'function') {
-        p.then(() => tryOrientationLock()).catch(() => {});
-      } else {
-        tryOrientationLock();
-      }
-      return;
-    } catch {
-      /* try next target */
+    const p = invokeRequestFullscreen(el);
+    if (p == null) continue;
+    if (typeof p.then === 'function') {
+      p.then(() => tryOrientationLock()).catch(() => {});
+    } else {
+      tryOrientationLock();
     }
+    return;
   }
 }
 
 export function exitGameFullscreen() {
   applyImmersiveMode(false);
-  const exit = document.exitFullscreen?.bind(document) || document.webkitExitFullscreen?.bind(document);
-  if (!exit) return;
-  if (isFullscreenActive()) exit().catch(() => {});
+  const exit =
+    document.exitFullscreen?.bind(document) ||
+    document.webkitExitFullscreen?.bind(document) ||
+    document.mozCancelFullScreen?.bind(document) ||
+    document.msExitFullscreen?.bind(document);
+  if (exit && isFullscreenActive()) exit().catch(() => {});
   screen.orientation?.unlock?.();
+}
+
+function touchAllowedTarget(target) {
+  return target instanceof Element && !!target.closest(PLAY_TOUCH_ALLOW);
+}
+
+function onPlayTouchStart(e) {
+  if (!document.documentElement.classList.contains('game-playing')) return;
+  if (e.touches.length > 1) {
+    e.preventDefault();
+    singleTouchOnControl = false;
+    return;
+  }
+  singleTouchOnControl = touchAllowedTarget(e.target);
+}
+
+function onPlayTouchMove(e) {
+  if (!document.documentElement.classList.contains('game-playing')) return;
+  if (e.touches.length > 1) {
+    e.preventDefault();
+    return;
+  }
+  if (singleTouchOnControl || touchAllowedTarget(e.target)) return;
+  e.preventDefault();
+}
+
+function onPlayTouchEnd() {
+  if (!document.documentElement.classList.contains('game-playing')) {
+    singleTouchOnControl = false;
+    return;
+  }
+  singleTouchOnControl = false;
+}
+
+function onPlayGesture(e) {
+  if (document.documentElement.classList.contains('game-playing')) e.preventDefault();
+}
+
+function onPlayWheel(e) {
+  if (!document.documentElement.classList.contains('game-playing')) return;
+  if (e.ctrlKey) e.preventDefault();
+}
+
+function bindPlayTouchGuards() {
+  if (playGuardsBound) return;
+  playGuardsBound = true;
+  document.addEventListener('touchstart', onPlayTouchStart, { passive: false, capture: true });
+  document.addEventListener('touchmove', onPlayTouchMove, { passive: false, capture: true });
+  document.addEventListener('touchend', onPlayTouchEnd, { passive: true, capture: true });
+  document.addEventListener('touchcancel', onPlayTouchEnd, { passive: true, capture: true });
+  document.addEventListener('gesturestart', onPlayGesture, { passive: false, capture: true });
+  document.addEventListener('gesturechange', onPlayGesture, { passive: false, capture: true });
+  document.addEventListener('gestureend', onPlayGesture, { passive: false, capture: true });
+  window.addEventListener('wheel', onPlayWheel, { passive: false, capture: true });
+}
+
+function unbindPlayTouchGuards() {
+  if (!playGuardsBound) return;
+  playGuardsBound = false;
+  document.removeEventListener('touchstart', onPlayTouchStart, true);
+  document.removeEventListener('touchmove', onPlayTouchMove, true);
+  document.removeEventListener('touchend', onPlayTouchEnd, true);
+  document.removeEventListener('touchcancel', onPlayTouchEnd, true);
+  singleTouchOnControl = false;
+  document.removeEventListener('gesturestart', onPlayGesture, true);
+  document.removeEventListener('gesturechange', onPlayGesture, true);
+  document.removeEventListener('gestureend', onPlayGesture, true);
+  window.removeEventListener('wheel', onPlayWheel, true);
+}
+
+export function setPlaySessionActive(active) {
+  document.documentElement.classList.toggle('game-playing', active);
+  if (active) bindPlayTouchGuards();
+  else {
+    unbindPlayTouchGuards();
+    singleTouchOnControl = false;
+  }
 }

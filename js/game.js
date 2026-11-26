@@ -13,7 +13,8 @@ import {
   isGameplayOrientationBlocked,
   setupOrientationGate,
   requestGameFullscreen,
-  exitGameFullscreen
+  exitGameFullscreen,
+  setPlaySessionActive
 } from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
@@ -203,6 +204,9 @@ function setupTouchPads() {
     e.preventDefault();
     moveLook(e.clientX, e.clientY, e.pointerId);
   });
+  padLook.addEventListener('lostpointercapture', e => {
+    if (lookPtr && lookPtr.id === e.pointerId) endLook(e.pointerId);
+  });
   const endLookPointer = e => {
     endLook(e.pointerId);
     try { padLook.releasePointerCapture(e.pointerId); } catch { /* noop */ }
@@ -254,6 +258,7 @@ setupFirePad();
 function exitToMenu() {
   if (state !== 'PLAYING') return;
   state = 'START';
+  setPlaySessionActive(false);
   exitGameFullscreen();
   audio.playThrustStop();
   pauseHint?.classList.remove('hidden');
@@ -328,6 +333,7 @@ function initLevel(clearFlash = false) {
 
 function startGame() {
   if (isPortraitBlocked()) return;
+  setPlaySessionActive(true);
   requestGameFullscreen(gameContainer);
   readDifficulty();
   audio.init();
@@ -357,6 +363,7 @@ function startGame() {
 
 function gameOverScreen() {
   state = 'GAMEOVER';
+  setPlaySessionActive(false);
   saveHiScore();
   goScoreEl.textContent = score;
   goHiScoreEl.textContent = Math.max(score, getHiScore());
