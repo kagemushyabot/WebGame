@@ -1,4 +1,4 @@
-import { CANOPY_CENTER, CONSOLE_TOP } from './cockpit.js';
+import { CONSOLE_TOP } from './cockpit.js';
 
 function formatTime(sec) {
   const s = Math.max(0, Math.ceil(sec));
@@ -8,57 +8,94 @@ function formatTime(sec) {
 }
 
 const FONT = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+const LIFE_SLOTS = 3;
+const HUD_GREEN = 'rgba(168, 255, 200, 0.98)';
+const HUD_GREEN_DIM = 'rgba(120, 200, 150, 0.88)';
+const HUD_STROKE = 'rgba(180, 205, 230, 0.55)';
 
-function measureTextBox(ctx, title, lines, vmin) {
-  const titleFs = Math.max(9, vmin * 0.016);
-  const bodyFs = Math.max(11, vmin * 0.02);
-  ctx.font = `600 ${titleFs}px ${FONT}`;
-  const titleW = ctx.measureText(title).width;
-  ctx.font = `700 ${bodyFs}px ${FONT}`;
-  let maxW = titleW;
-  for (const line of lines) maxW = Math.max(maxW, ctx.measureText(line).width);
-  const padX = 10;
-  const padY = 6;
-  const titleBand = titleFs * 1.25;
-  const bodyH = lines.length * bodyFs * 1.15;
-  return {
-    w: maxW + padX * 2,
-    h: titleBand + bodyH + padY * 2,
-    bodyFs,
-    titleFs,
-    padX,
-    padY,
-    titleBand
-  };
-}
+/**
+ * Reference HUD (from screenshot crop):
+ * Top-center inverted trapezoid with 3 columns:
+ *   LV n + 3 life rockets | SCORE / value | TIMER / value
+ * Top-right: ♫ / FX mute circles
+ * Bottom-center console: CAUTION beacon only
+ * Top-left: MAP
+ */
 
-function drawPanelTight(ctx, x, y, ww, hh, title, titleFs) {
-  ctx.fillStyle = 'rgba(4, 12, 10, 0.94)';
-  ctx.fillRect(x, y, ww, hh);
-  ctx.strokeStyle = 'rgba(75, 220, 140, 0.55)';
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(x + 0.5, y + 0.5, ww - 1, hh - 1);
-  ctx.fillStyle = 'rgba(120, 200, 150, 0.85)';
-  ctx.font = `600 ${titleFs}px ${FONT}`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(title, x + 10, y + titleFs * 1.05);
-}
+/**
+ * Reference life rocket (vertical line art):
+ * pointed nose → tapered body → 2 stacked circle windows → triangular base fins.
+ * `cy` is the vertical center of the icon.
+ */
+function drawLifeRocket(ctx, cx, cy, scale, alpha) {
+  const s = scale;
+  const top = cy - s * 0.5;
+  const bodyTop = cy - s * 0.22;
+  const bodyBot = cy + s * 0.22;
+  const base = cy + s * 0.42;
+  const hw = s * 0.16;
+  const finW = s * 0.28;
 
-function drawPanelLinesTight(ctx, x, y, box, lines, title) {
-  drawPanelTight(ctx, x, y, box.w, box.h, title, box.titleFs);
-  ctx.fillStyle = 'rgba(170, 255, 200, 0.98)';
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
-  ctx.font = `700 ${box.bodyFs}px ${FONT}`;
-  const startY = y + box.titleBand + box.bodyFs * 0.1;
-  const gap = box.bodyFs * 1.15;
-  lines.forEach((line, i) => ctx.fillText(line, x + box.padX, startY + gap * (i + 1)));
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(1.15, s * 0.07);
+  ctx.globalAlpha = alpha;
+  ctx.strokeStyle = alpha > 0.45 ? '#f5f9ff' : 'rgba(150, 165, 180, 0.38)';
+
+  // nose cone
+  ctx.beginPath();
+  ctx.moveTo(cx, top);
+  ctx.lineTo(cx + hw, bodyTop);
+  ctx.lineTo(cx - hw, bodyTop);
+  ctx.closePath();
+  ctx.stroke();
+
+  // body tube
+  ctx.beginPath();
+  ctx.moveTo(cx - hw, bodyTop);
+  ctx.lineTo(cx - hw, bodyBot);
+  ctx.lineTo(cx + hw, bodyBot);
+  ctx.lineTo(cx + hw, bodyTop);
+  ctx.stroke();
+
+  // windows (2 stacked circles)
+  const wr = Math.max(1.15, s * 0.055);
+  ctx.beginPath();
+  ctx.arc(cx, cy - s * 0.06, wr, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(cx, cy + s * 0.1, wr, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // left fin
+  ctx.beginPath();
+  ctx.moveTo(cx - hw, bodyBot - s * 0.02);
+  ctx.lineTo(cx - finW, base);
+  ctx.lineTo(cx - hw * 0.35, bodyBot + s * 0.06);
+  ctx.closePath();
+  ctx.stroke();
+
+  // right fin
+  ctx.beginPath();
+  ctx.moveTo(cx + hw, bodyBot - s * 0.02);
+  ctx.lineTo(cx + finW, base);
+  ctx.lineTo(cx + hw * 0.35, bodyBot + s * 0.06);
+  ctx.closePath();
+  ctx.stroke();
+
+  // nozzle lip
+  ctx.beginPath();
+  ctx.moveTo(cx - hw * 0.55, bodyBot + s * 0.04);
+  ctx.lineTo(cx + hw * 0.55, bodyBot + s * 0.04);
+  ctx.stroke();
+
+  ctx.restore();
 }
 
 function threatColors(level, frame) {
   if (level === 0) return { core: '#44ee77', glow: 'rgba(68,238,119,0.45)', ring: 'rgba(68,238,119,0.35)' };
-  if (level === 1) return { core: '#ffdd44', glow: 'rgba(255,221,68,0.5)', ring: 'rgba(255,221,68,0.4)' };
+  if (level === 1) return { core: '#ffdd44', glow: 'rgba(255,221,68,0.55)', ring: 'rgba(255,221,68,0.45)' };
   const flash = 0.55 + 0.45 * Math.abs(Math.sin(frame * 0.22));
   return {
     core: `rgba(255,${Math.floor(40 * flash)},${Math.floor(50 * flash)},1)`,
@@ -67,31 +104,151 @@ function threatColors(level, frame) {
   };
 }
 
+function measureHud(ctx, w, h, ui) {
+  const vmin = Math.min(w, h);
+  const labelFs = Math.max(10, vmin * 0.0165);
+  const valueFs = Math.max(12, vmin * 0.021);
+  const lifeScale = Math.max(18, vmin * 0.048);
+  const padX = Math.max(16, vmin * 0.03);
+  const padY = Math.max(7, vmin * 0.011);
+  const colGap = Math.max(24, vmin * 0.055);
+  const rowGap = Math.max(6, labelFs * 0.45);
+
+  const lvLabel = `LV ${ui.level}`;
+  const scoreLabel = 'SCORE';
+  const scoreVal = String(ui.score).padStart(5, '0');
+  const timerLabel = 'TIMER';
+  const timerVal = formatTime(ui.timeLeft);
+
+  ctx.font = `700 ${labelFs}px ${FONT}`;
+  const lvW = Math.max(ctx.measureText(lvLabel).width, lifeScale * 3.4);
+  ctx.font = `700 ${valueFs}px ${FONT}`;
+  const scoreW = Math.max(ctx.measureText(scoreLabel).width, ctx.measureText(scoreVal).width);
+  const timerW = Math.max(ctx.measureText(timerLabel).width, ctx.measureText(timerVal).width);
+
+  const innerW = lvW + scoreW + timerW + colGap * 2;
+  const topW = innerW + padX * 2;
+  const bottomW = topW * 0.88;
+  const secondRowH = Math.max(valueFs * 1.2, lifeScale);
+  const contentH = labelFs + rowGap + secondRowH;
+  const trapH = contentH + padY * 2;
+
+  const topX = (w - topW) * 0.5;
+  const topY = h * 0.028;
+  const botX = (w - bottomW) * 0.5;
+  const botY = topY + trapH;
+
+  const col1X = topX + padX + lvW * 0.5;
+  const col2X = topX + padX + lvW + colGap + scoreW * 0.5;
+  const col3X = topX + padX + lvW + colGap + scoreW + colGap + timerW * 0.5;
+  const labelY = topY + padY + labelFs;
+  const valueY = labelY + rowGap + valueFs;
+  // rockets sit fully below LV text
+  const lifeCy = labelY + rowGap + lifeScale * 0.52;
+
+  return {
+    vmin,
+    margin: Math.max(6, w * 0.01),
+    radarSize: Math.min(vmin * 0.215, w * 0.24, h * 0.195),
+    radarY: h * 0.1,
+    topX,
+    topY,
+    topW,
+    botX,
+    botY,
+    bottomW,
+    trapH,
+    labelFs,
+    valueFs,
+    lifeScale,
+    col1X,
+    col2X,
+    col3X,
+    labelY,
+    valueY,
+    lifeCy,
+    lvLabel,
+    scoreLabel,
+    scoreVal,
+    timerLabel,
+    timerVal,
+    beaconY: h * CONSOLE_TOP + (h - h * CONSOLE_TOP) * 0.4
+  };
+}
+
+function drawTrapezoidPanel(ctx, L) {
+  ctx.beginPath();
+  ctx.moveTo(L.topX, L.topY);
+  ctx.lineTo(L.topX + L.topW, L.topY);
+  ctx.lineTo(L.botX + L.bottomW, L.botY);
+  ctx.lineTo(L.botX, L.botY);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(8, 12, 22, 0.82)';
+  ctx.fill();
+  ctx.strokeStyle = HUD_STROKE;
+  ctx.lineWidth = 1.35;
+  ctx.stroke();
+}
+
+function drawTopStatusTrapezoid(ctx, L, lives) {
+  drawTrapezoidPanel(ctx, L);
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+
+  // column 1: LV + rockets (rockets clearly below the label)
+  ctx.fillStyle = HUD_GREEN;
+  ctx.font = `700 ${L.labelFs}px ${FONT}`;
+  ctx.fillText(L.lvLabel, L.col1X, L.labelY);
+  const gap = L.lifeScale * 1.15;
+  const x0 = L.col1X - ((LIFE_SLOTS - 1) * gap) / 2;
+  for (let i = 0; i < LIFE_SLOTS; i++) {
+    drawLifeRocket(ctx, x0 + i * gap, L.lifeCy, L.lifeScale, i < lives ? 1 : 0.3);
+  }
+
+  // column 2: SCORE
+  ctx.fillStyle = HUD_GREEN_DIM;
+  ctx.font = `600 ${L.labelFs}px ${FONT}`;
+  ctx.fillText(L.scoreLabel, L.col2X, L.labelY);
+  ctx.fillStyle = HUD_GREEN;
+  ctx.font = `700 ${L.valueFs}px ${FONT}`;
+  ctx.fillText(L.scoreVal, L.col2X, L.valueY);
+
+  // column 3: TIMER
+  ctx.fillStyle = HUD_GREEN_DIM;
+  ctx.font = `600 ${L.labelFs}px ${FONT}`;
+  ctx.fillText(L.timerLabel, L.col3X, L.labelY);
+  ctx.fillStyle = HUD_GREEN;
+  ctx.font = `700 ${L.valueFs}px ${FONT}`;
+  ctx.fillText(L.timerVal, L.col3X, L.valueY);
+}
+
 function drawBeacon(ctx, cx, cy, threat, frame, vmin) {
-  const r = Math.min(vmin * 0.056, 38);
+  const r = Math.min(vmin * 0.048, 34);
   const { core, glow, ring } = threatColors(threat, frame);
-  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.2);
+  const grd = ctx.createRadialGradient(cx, cy, 0, cx, cy, r * 2.1);
   grd.addColorStop(0, glow);
   grd.addColorStop(1, 'rgba(0,0,0,0)');
   ctx.fillStyle = grd;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 2.2, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 2.1, 0, Math.PI * 2);
   ctx.fill();
   ctx.strokeStyle = ring;
-  ctx.lineWidth = 2.5;
+  ctx.lineWidth = 2.2;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 1.35, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 1.32, 0, Math.PI * 2);
   ctx.stroke();
   ctx.fillStyle = core;
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 2);
   ctx.fill();
-  const labelFs = Math.max(12, vmin * 0.028);
-  ctx.fillStyle = 'rgba(200,255,220,0.92)';
+  const labelFs = Math.max(11, vmin * 0.024);
+  ctx.fillStyle = 'rgba(220, 255, 235, 0.95)';
   ctx.font = `800 ${labelFs}px ${FONT}`;
   ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
   const label = threat === 0 ? 'SAFE' : threat === 1 ? 'CAUTION' : 'DANGER';
-  ctx.fillText(label, cx, cy + r * 2.15 + labelFs * 0.35);
+  ctx.fillText(label, cx, cy + r * 1.95 + labelFs * 0.25);
 }
 
 function drawRadarSquare(ctx, x, y, size, ui) {
@@ -100,7 +257,7 @@ function drawRadarSquare(ctx, x, y, size, ui) {
   ctx.fillRect(x, y, size, size);
   ctx.strokeStyle = 'rgba(75, 220, 140, 0.55)';
   ctx.strokeRect(x + 0.5, y + 0.5, size - 1, size - 1);
-  ctx.fillStyle = 'rgba(120, 200, 150, 0.85)';
+  ctx.fillStyle = HUD_GREEN_DIM;
   ctx.font = `600 ${titleFs}px ${FONT}`;
   ctx.textAlign = 'left';
   ctx.fillText('MAP', x + 8, y + titleFs * 1.1);
@@ -143,83 +300,38 @@ function drawRadarSquare(ctx, x, y, size, ui) {
   ctx.fillText(`LEFT ${ui.asteroidCount}`, x + size / 2, y + size - footerBand * 0.4);
 }
 
-function canopyMuteFrame(w, h) {
+function topRightMuteButtonLayout(w, h, vmin) {
+  const btnSize = Math.min(Math.max(32, vmin * 0.05), 44);
+  const gap = Math.max(5, btnSize * 0.16);
+  const marginR = Math.max(52, w * 0.07);
+  const marginT = Math.max(8, h * 0.016);
+  const left0 = w - marginR - btnSize * 2 - gap;
   return {
-    x: CANOPY_CENTER.left * w,
-    y: CANOPY_CENTER.top * h,
-    w: (CANOPY_CENTER.right - CANOPY_CENTER.left) * w,
-    h: (CANOPY_CENTER.bottom - CANOPY_CENTER.top) * h
+    musicMute: { left: left0, top: marginT, width: btnSize, height: btnSize },
+    sfxMute: { left: left0 + btnSize + gap, top: marginT, width: btnSize, height: btnSize }
   };
 }
 
-function topCanopyMuteButtonLayout(w, h, vmin) {
-  const f = canopyMuteFrame(w, h);
-  const btnGap = Math.max(5, f.w * 0.07);
-  const btnSize = Math.min((f.w - btnGap) / 2.15, f.h * 0.78, vmin * 0.055);
-  const total = btnSize * 2 + btnGap;
-  const left0 = w * 0.5 - total / 2;
-  const top = f.y + (f.h - btnSize) / 2;
-  return {
-    musicMute: { left: left0, top, width: btnSize, height: btnSize },
-    sfxMute: { left: left0 + btnSize + btnGap, top, width: btnSize, height: btnSize }
-  };
-}
-
-function panelLines(ui) {
-  return {
-    status: [`SCORE ${ui.score}`, `LV ${ui.level}`, `LIVES ${ui.lives}`],
-    timer: [formatTime(ui.timeLeft)]
-  };
-}
-
-function consoleLayout(ctx, w, h, ui) {
-  const vmin = Math.min(w, h);
-  const margin = w * 0.012;
-  const lines = panelLines(ui);
-  const m1 = measureTextBox(ctx, 'STATUS', lines.status, vmin);
-  const m2 = measureTextBox(ctx, 'TIMER', lines.timer, vmin);
-  const panelW = Math.max(m1.w, m2.w);
-  const panelH = Math.max(m1.h, m2.h);
-  const beaconHalf = vmin * 0.11;
-  const innerGap = vmin * 0.022;
-  const rowY = h * CONSOLE_TOP - panelH * 0.12;
-  const statusX = w * 0.5 - beaconHalf - innerGap - panelW;
-  const timerX = w * 0.5 + beaconHalf + innerGap;
-  const radarSize = Math.min(vmin * 0.24, w * 0.26, h * 0.22);
-  const radarY = h * 0.11;
-  const box = { w: panelW, h: panelH, bodyFs: Math.max(m1.bodyFs, m2.bodyFs), titleFs: m1.titleFs, padX: m1.padX, padY: m1.padY, titleBand: m1.titleBand };
-  return { margin, rowY, statusX, timerX, panelW, panelH, box, vmin, radarSize, radarY };
-}
-
-/** Cockpit-mounted HUD: stats, timer, radar, proximity beacon. */
 export function drawCockpitInstruments(ctx, w, h, ui) {
-  const L = consoleLayout(ctx, w, h, ui);
-  const lines = panelLines(ui);
-  const beaconX = w * 0.5;
-  const beaconY = L.rowY + L.panelH * 0.42;
-
-  drawPanelLinesTight(ctx, L.statusX, L.rowY, { ...L.box, w: L.panelW, h: L.panelH }, lines.status, 'STATUS');
-  drawPanelLinesTight(ctx, L.timerX, L.rowY, { ...L.box, w: L.panelW, h: L.panelH }, lines.timer, 'TIMER');
-  drawBeacon(ctx, beaconX, beaconY, ui.threat, ui.frame, L.vmin);
+  const L = measureHud(ctx, w, h, ui);
   drawRadarSquare(ctx, L.margin, L.radarY, L.radarSize, ui);
+  drawTopStatusTrapezoid(ctx, L, ui.lives);
+  drawBeacon(ctx, w * 0.5, L.beaconY, ui.threat, ui.frame, L.vmin);
 }
 
-/** Normalized rects for overlaying HTML controls on console screens. */
 export function cockpitControlLayout(w, h, ui) {
   const canvas = document.getElementById('game');
   const cctx = canvas?.getContext('2d');
+  const vmin = Math.min(w, h);
   if (!cctx || !ui) {
-    const vmin = Math.min(w, h);
-    const mute = topCanopyMuteButtonLayout(w, h, vmin);
     return {
-      ...mute,
-      recenter: { left: w * 0.28, top: h * 0.84, width: vmin * 0.14, height: vmin * 0.1 }
+      ...topRightMuteButtonLayout(w, h, vmin),
+      recenter: { left: vmin * 0.01, top: h * 0.1, width: vmin * 0.12, height: vmin * 0.1 }
     };
   }
-  const L = consoleLayout(cctx, w, h, ui);
-  const mute = topCanopyMuteButtonLayout(w, h, L.vmin);
+  const L = measureHud(cctx, w, h, ui);
   return {
-    ...mute,
-    recenter: { left: L.statusX, top: L.rowY, width: L.panelW, height: L.panelH }
+    ...topRightMuteButtonLayout(w, h, L.vmin),
+    recenter: { left: L.topX, top: L.topY, width: L.topW * 0.28, height: L.trapH }
   };
 }

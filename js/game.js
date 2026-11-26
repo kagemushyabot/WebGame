@@ -146,8 +146,8 @@ window.addEventListener('deviceorientation', e => { if (e.beta != null) onDevice
 let lookPtr = null;
 let lastLoopAt = 0;
 /** Virtual joystick: deflection → angular velocity (rad/s at full tilt). */
-const LOOK_JOY_MAX_YAW = 0.95;
-const LOOK_JOY_MAX_PITCH = 0.68;
+const LOOK_JOY_MAX_YAW = 0.72;
+const LOOK_JOY_MAX_PITCH = 0.5;
 const LOOK_JOY_DEAD = 10;
 let warpFx = { t: 0, duration: 48 };
 
@@ -289,8 +289,17 @@ function applyLookJoystick(dt) {
   ship.pitch = clamp(ship.pitch + lookPtr.pitchRate * dt, -1.2, 1.2);
 }
 
+function blockSelectionWhileLook(e) {
+  if (lookPtr) e.preventDefault();
+}
+
 function setupTouchPads() {
   if (!padLook) return;
+  document.addEventListener('selectstart', blockSelectionWhileLook, true);
+  document.addEventListener('dragstart', blockSelectionWhileLook, true);
+  const blockPadMenu = e => e.preventDefault();
+  padLook.addEventListener('contextmenu', blockPadMenu);
+  padFire?.addEventListener('contextmenu', blockPadMenu);
   padLook.addEventListener('pointerdown', e => {
     if (state !== 'PLAYING') return;
     e.preventDefault();
@@ -301,7 +310,7 @@ function setupTouchPads() {
     if (!lookPtr || lookPtr.id !== e.pointerId) return;
     e.preventDefault();
     moveLook(e.clientX, e.clientY, e.pointerId);
-  });
+  }, { passive: false });
   padLook.addEventListener('lostpointercapture', e => {
     if (lookPtr && lookPtr.id === e.pointerId) endLook(e.pointerId);
   });
@@ -475,7 +484,18 @@ function initLevel(clearFlash = false) {
 }
 
 function startGame() {
-  if (isPortraitBlocked()) return;
+  if (isPortraitBlocked()) {
+    orientationLock?.classList.remove('hidden');
+    return;
+  }
+  try {
+    beginPlaySession();
+  } catch (err) {
+    console.error('startGame failed', err);
+  }
+}
+
+function beginPlaySession() {
   setPlaySessionActive(true);
   requestGameFullscreen(gameContainer);
   readDifficulty();

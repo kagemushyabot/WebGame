@@ -66,7 +66,7 @@ canvas#game { display: block; width: 100%; height: 100%; }
 
 .panel {
   position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: safe center;
-  z-index: 30; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+  z-index: 55; pointer-events: none; opacity: 0; transition: opacity 0.3s;
   overflow-x: hidden;
   overflow-y: auto;
   padding: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
@@ -165,6 +165,10 @@ html.cockpit-ui #btnRecenter { display: grid; }
   pointer-events: auto;
   touch-action: none;
   user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
   display: grid;
   place-items: center;
   cursor: pointer;
@@ -172,6 +176,10 @@ html.cockpit-ui #btnRecenter { display: grid; }
 }
 .touch-pad--look { left: max(8px, env(safe-area-inset-left, 0px), 2vw); }
 .touch-pad--fire { right: max(8px, env(safe-area-inset-right, 0px), 2vw); border-color: rgba(255, 170, 90, 0.5); box-shadow: inset 0 0 24px rgba(255, 120, 40, 0.1), 0 8px 28px rgba(0, 0, 0, 0.35); }
+html:not(.cockpit-ui) .touch-pad {
+  display: none !important;
+  pointer-events: none !important;
+}
 html.cockpit-ui .touch-pad {
   bottom: max(12px, env(safe-area-inset-bottom, 0px), 2vh);
   width: clamp(92px, 24vmin, 136px);
@@ -198,6 +206,16 @@ html.cockpit-ui .touch-pad__hint {
   pointer-events: none;
   transition: transform 0.05s ease-out;
   will-change: transform;
+}
+.touch-pad,
+.touch-pad * {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.touch-pad::selection,
+.touch-pad *::selection {
+  background: transparent;
 }
 .touch-pad__label {
   font-size: clamp(11px, 3vw, 13px);
@@ -268,10 +286,10 @@ html.cockpit-ui .icon-btn.cockpit-hit {
   border-radius: 8px;
 }
 html.cockpit-ui .icon-btn.mute-toggle.cockpit-hit {
-  opacity: 0.82;
+  opacity: 0.9;
   border-radius: 50%;
-  border-color: rgba(120, 220, 160, 0.55);
-  background: rgba(8, 22, 16, 0.88);
+  border-color: rgba(140, 210, 255, 0.55);
+  background: rgba(12, 16, 28, 0.88);
   display: grid;
   place-items: center;
   padding: 0;
