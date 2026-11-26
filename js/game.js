@@ -146,8 +146,8 @@ window.addEventListener('deviceorientation', e => { if (e.beta != null) onDevice
 let lookPtr = null;
 let lastLoopAt = 0;
 /** Virtual joystick: deflection → angular velocity (rad/s at full tilt). */
-const LOOK_JOY_MAX_YAW = 1.35;
-const LOOK_JOY_MAX_PITCH = 0.95;
+const LOOK_JOY_MAX_YAW = 0.95;
+const LOOK_JOY_MAX_PITCH = 0.68;
 const LOOK_JOY_DEAD = 10;
 let warpFx = { t: 0, duration: 48 };
 
