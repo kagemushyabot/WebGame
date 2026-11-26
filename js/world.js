@@ -7,7 +7,7 @@ export const WORLD = {
   spawnSpread: 240,
   minSpawnFromShip: 165,
   camDist: 82,
-  focal: 480,
+  focal: 365,
   bulletSpeed: 3.6,
   bulletLife: 100,
   fireCooldown: 20,

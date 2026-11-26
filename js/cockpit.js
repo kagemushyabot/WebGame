@@ -5,11 +5,11 @@
 /** Console band = bottom ~1/5 of the screen. */
 export const CONSOLE_TOP = 0.8;
 const VIEW_BOTTOM = 0.798;
-const MAIN_TOP = 0.118;
-const MAIN_LEFT = 0.055;
-const MAIN_RIGHT = 0.945;
-const MAIN_BOT_LEFT = 0.16;
-const MAIN_BOT_RIGHT = 0.84;
+const MAIN_TOP = 0.108;
+const MAIN_LEFT = 0.038;
+const MAIN_RIGHT = 0.962;
+const MAIN_BOT_LEFT = 0.13;
+const MAIN_BOT_RIGHT = 0.87;
 
 function P(w, h, nx, ny) {
   return { x: nx * w, y: ny * h };

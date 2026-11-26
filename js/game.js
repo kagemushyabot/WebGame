@@ -16,7 +16,8 @@ import {
   setupOrientationGate,
   requestGameFullscreen,
   exitGameFullscreen,
-  setPlaySessionActive
+  setPlaySessionActive,
+  bindFullscreenMaintenance
 } from './mobile.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
@@ -37,7 +38,7 @@ const btnStart = document.getElementById('btnStart');
 const btnRestart = document.getElementById('btnRestart');
 const btnRecenter = document.getElementById('btnRecenter');
 const btnMute = document.getElementById('btnMute');
-const btnQuit = document.getElementById('btnQuit');
+const btnClose = document.getElementById('btnClose');
 const padLook = document.getElementById('padLook');
 const padFire = document.getElementById('padFire');
 const levelFlash = document.getElementById('levelFlash');
@@ -46,6 +47,7 @@ const gameContainer = document.getElementById('game-container');
 const orientationLock = document.getElementById('orientationLock');
 
 setupOrientationGate(orientationLock);
+bindFullscreenMaintenance(gameContainer);
 
 let width, height, dpr;
 let cxCanvas, cyCanvas;
@@ -76,7 +78,6 @@ function layoutCockpitControls() {
   };
   apply(btnRecenter, L.recenter);
   apply(btnMute, L.audio);
-  apply(btnQuit, L.quit);
 }
 window.addEventListener('resize', () => { resize(); layoutCockpitControls(); });
 resize();
@@ -295,7 +296,7 @@ btnRecenter.addEventListener('click', () => {
   ship.yaw = 0;
   ship.pitch = 0;
 });
-btnQuit?.addEventListener('click', () => exitToMenu());
+btnClose?.addEventListener('click', () => exitToMenu());
 btnMute.addEventListener('click', () => {
   audio.setMute(!audio.muted);
   btnMute.textContent = audio.muted ? '🔇' : '🔊';

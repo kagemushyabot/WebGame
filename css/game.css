@@ -198,6 +198,37 @@ html.cockpit-ui .icon-btn.cockpit-hit:active {
   background: rgba(40, 100, 70, 0.55);
 }
 
+.btn-close-game {
+  display: none;
+  position: absolute;
+  top: max(10px, env(safe-area-inset-top, 0px));
+  right: max(10px, env(safe-area-inset-right, 0px));
+  z-index: 60;
+  width: clamp(44px, 10vw, 52px);
+  height: clamp(44px, 10vw, 52px);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 120, 120, 0.55);
+  background: rgba(40, 12, 16, 0.82);
+  color: #ffdddd;
+  font-size: clamp(18px, 5vw, 22px);
+  font-weight: 800;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+.btn-close-game:active {
+  background: rgba(120, 30, 40, 0.9);
+}
+html.cockpit-ui .btn-close-game {
+  display: grid;
+  place-items: center;
+}
+html.fs-requested.game-playing body {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+
 .orientation-lock {
   position: fixed;
   inset: 0;

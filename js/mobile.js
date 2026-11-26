@@ -2,7 +2,7 @@ let portraitOverlayActive = false;
 let playGuardsBound = false;
 let singleTouchOnControl = false;
 
-const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnQuit, #btnMute, #btnRecenter, .topbar';
+const PLAY_TOUCH_ALLOW = '#padLook, #padFire, #btnClose, #btnMute, #btnRecenter, .topbar';
 
 export function isMobileDevice() {
   if (window.matchMedia('(hover: none) and (pointer: coarse)').matches) return true;
@@ -97,28 +97,53 @@ function invokeRequestFullscreen(el) {
   }
 }
 
+function onFullscreenDone() {
+  tryOrientationLock();
+  applyImmersiveMode(true);
+}
+
 export function requestGameFullscreen(container) {
   applyImmersiveMode(true);
+  document.documentElement.classList.add('fs-requested');
 
   if (isFullscreenActive()) {
-    tryOrientationLock();
+    onFullscreenDone();
     return;
   }
 
-  const targets = [container, document.documentElement, document.body].filter(Boolean);
-  for (const el of targets) {
+  const mobile = isMobileDevice();
+  const targets = mobile
+    ? [document.documentElement, container, document.body]
+    : [container, document.documentElement, document.body];
+  const filtered = targets.filter(Boolean);
+
+  for (const el of filtered) {
     const p = invokeRequestFullscreen(el);
     if (p == null) continue;
     if (typeof p.then === 'function') {
-      p.then(() => tryOrientationLock()).catch(() => {});
+      p.then(onFullscreenDone).catch(() => {});
     } else {
-      tryOrientationLock();
+      onFullscreenDone();
     }
     return;
   }
 }
 
+export function bindFullscreenMaintenance(container) {
+  const retry = () => {
+    if (!document.documentElement.classList.contains('game-playing')) return;
+    if (isFullscreenActive()) return;
+    requestGameFullscreen(container);
+  };
+  document.addEventListener('fullscreenchange', () => {
+    if (isFullscreenActive()) onFullscreenDone();
+    else if (document.documentElement.classList.contains('fs-requested')) retry();
+  });
+  document.addEventListener('webkitfullscreenchange', retry);
+}
+
 export function exitGameFullscreen() {
+  document.documentElement.classList.remove('fs-requested');
   applyImmersiveMode(false);
   const exit =
     document.exitFullscreen?.bind(document) ||

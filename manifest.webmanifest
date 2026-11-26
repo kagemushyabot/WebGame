@@ -1,0 +1,11 @@
+{
+  "name": "ASTEROIDS 3D",
+  "short_name": "Asteroids3D",
+  "description": "Cockpit 3D asteroid shooter",
+  "start_url": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05070c",
+  "theme_color": "#05070c",
+  "icons": []
+}

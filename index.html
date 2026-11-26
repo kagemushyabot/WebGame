@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
 <title>ASTEROIDS 3D</title>
 <link rel="stylesheet" href="css/game.css">
 </head>
@@ -26,10 +28,10 @@
       <div class="stat">LEVEL<b id="level">1</b></div>
       <div class="stat">LIVES<b id="lives">3</b></div>
     </div>
+    <button type="button" class="btn-close-game" id="btnClose" title="Close game" aria-label="Close game">✕</button>
     <div class="topbar">
       <button type="button" class="icon-btn cockpit-hit" id="btnRecenter" title="Reset aim" aria-label="Reset aim">↻</button>
       <button type="button" class="icon-btn cockpit-hit" id="btnMute" title="Toggle mute" aria-label="Toggle mute">🔊</button>
-      <button type="button" class="icon-btn cockpit-hit" id="btnQuit" title="Quit (Esc)" aria-label="Quit">✕</button>
     </div>
 
     <button type="button" class="touch-pad touch-pad--look" id="padLook" aria-label="Drag to look, tap to warp">
