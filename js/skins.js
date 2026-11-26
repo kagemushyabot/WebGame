@@ -63,7 +63,15 @@ function finalizeWire(verts, edgeSet) {
   return { verts, edges, boundsR: maxR };
 }
 
-/** Wire pumpkin: squat ellipsoid + longitude ribs + stem. */
+/** Push a polyline (closed optional) onto verts/edges. */
+function addPoly(verts, edgeSet, pts, closed = true) {
+  const start = verts.length;
+  for (const p of pts) verts.push(p);
+  for (let i = 0; i < pts.length - 1; i++) addEdge(edgeSet, start + i, start + i + 1);
+  if (closed && pts.length > 2) addEdge(edgeSet, start + pts.length - 1, start);
+}
+
+/** Wire pumpkin lantern: squat ribs + stem + jack-o'-lantern face on +Z. */
 export function makePumpkinWire(baseR) {
   const verts = [];
   const edgeSet = new Set();
@@ -118,7 +126,152 @@ export function makePumpkinWire(baseR) {
     addEdge(edgeSet, i0, i0 + 1);
   }
 
-  return finalizeWire(verts, edgeSet);
+  // Jack-o'-lantern face on the forward (+Z) cheek.
+  const fz = baseR * sz * 0.78;
+  const e = baseR * 0.16;
+  const eyeY = baseR * sy * 0.18;
+  const eyeX = baseR * sx * 0.28;
+  // Triangle eyes
+  addPoly(verts, edgeSet, [
+    { x: -eyeX, y: eyeY + e, z: fz },
+    { x: -eyeX - e, y: eyeY - e * 0.7, z: fz },
+    { x: -eyeX + e, y: eyeY - e * 0.7, z: fz }
+  ]);
+  addPoly(verts, edgeSet, [
+    { x: eyeX, y: eyeY + e, z: fz },
+    { x: eyeX - e, y: eyeY - e * 0.7, z: fz },
+    { x: eyeX + e, y: eyeY - e * 0.7, z: fz }
+  ]);
+  // Triangle nose
+  const n = baseR * 0.1;
+  addPoly(verts, edgeSet, [
+    { x: 0, y: e * 0.15, z: fz * 1.02 },
+    { x: -n, y: -n * 0.9, z: fz * 1.02 },
+    { x: n, y: -n * 0.9, z: fz * 1.02 }
+  ]);
+  // Jagged smile
+  const smileY = -baseR * sy * 0.22;
+  const smileW = baseR * sx * 0.42;
+  const jag = baseR * 0.07;
+  addPoly(verts, edgeSet, [
+    { x: -smileW, y: smileY, z: fz },
+    { x: -smileW * 0.6, y: smileY - jag, z: fz },
+    { x: -smileW * 0.25, y: smileY + jag * 0.35, z: fz },
+    { x: 0, y: smileY - jag, z: fz },
+    { x: smileW * 0.25, y: smileY + jag * 0.35, z: fz },
+    { x: smileW * 0.6, y: smileY - jag, z: fz },
+    { x: smileW, y: smileY, z: fz },
+    { x: smileW * 0.55, y: smileY + jag * 1.1, z: fz },
+    { x: 0, y: smileY + jag * 0.55, z: fz },
+    { x: -smileW * 0.55, y: smileY + jag * 1.1, z: fz }
+  ], true);
+
+  const wire = finalizeWire(verts, edgeSet);
+  wire.motif = 'pumpkin';
+  return wire;
+}
+
+/** Wire turkey: plump body, neck, head, fan tail. */
+export function makeTurkeyWire(baseR) {
+  const verts = [];
+  const edgeSet = new Set();
+  const bodyR = baseR * 0.55;
+  const bodySy = 0.7;
+  const rings = 4;
+  const segs = 8;
+
+  // Plump body (slightly elongated along Z)
+  for (let i = 0; i <= rings; i++) {
+    const v = i / rings;
+    const lat = Math.PI * (v - 0.5);
+    const cy = Math.sin(lat) * bodyR * bodySy;
+    const cr = Math.cos(lat) * bodyR;
+    for (let j = 0; j < segs; j++) {
+      const a = (2 * Math.PI * j) / segs;
+      verts.push({
+        x: Math.cos(a) * cr * 0.95,
+        y: cy,
+        z: Math.sin(a) * cr * 1.15 - bodyR * 0.15
+      });
+    }
+  }
+  for (let i = 0; i < rings; i++) {
+    for (let j = 0; j < segs; j++) {
+      const a = i * segs + j;
+      const b = i * segs + ((j + 1) % segs);
+      const c = (i + 1) * segs + j;
+      addEdge(edgeSet, a, b);
+      addEdge(edgeSet, a, c);
+    }
+  }
+
+  // Neck + head toward +Z
+  const neck = [
+    { x: 0, y: bodyR * 0.15, z: bodyR * 0.55 },
+    { x: 0, y: bodyR * 0.45, z: bodyR * 0.95 },
+    { x: 0, y: bodyR * 0.55, z: bodyR * 1.25 }
+  ];
+  const n0 = verts.length;
+  for (const p of neck) verts.push(p);
+  addEdge(edgeSet, n0, n0 + 1);
+  addEdge(edgeSet, n0 + 1, n0 + 2);
+
+  // Beak
+  const beak = verts.length;
+  verts.push({ x: 0, y: bodyR * 0.48, z: bodyR * 1.45 });
+  addEdge(edgeSet, n0 + 2, beak);
+
+  // Wattle
+  const wattle = verts.length;
+  verts.push({ x: 0, y: bodyR * 0.25, z: bodyR * 1.2 });
+  addEdge(edgeSet, n0 + 2, wattle);
+
+  // Head diamond
+  addPoly(verts, edgeSet, [
+    { x: 0, y: bodyR * 0.75, z: bodyR * 1.2 },
+    { x: bodyR * 0.22, y: bodyR * 0.55, z: bodyR * 1.28 },
+    { x: 0, y: bodyR * 0.4, z: bodyR * 1.35 },
+    { x: -bodyR * 0.22, y: bodyR * 0.55, z: bodyR * 1.28 }
+  ]);
+
+  // Fan tail (behind, −Z)
+  const fanRoot = { x: 0, y: bodyR * 0.1, z: -bodyR * 0.85 };
+  const fr = verts.length;
+  verts.push(fanRoot);
+  const feathers = 7;
+  for (let i = 0; i < feathers; i++) {
+    const t = i / (feathers - 1);
+    const ang = -Math.PI * 0.55 + Math.PI * 1.1 * t;
+    const len = bodyR * (1.15 + 0.15 * Math.sin(t * Math.PI));
+    const tip = verts.length;
+    verts.push({
+      x: Math.sin(ang) * len,
+      y: bodyR * 0.15 + Math.cos(ang * 0.5) * bodyR * 0.55,
+      z: fanRoot.z - Math.cos(ang) * len * 0.35
+    });
+    addEdge(edgeSet, fr, tip);
+    if (i > 0) addEdge(edgeSet, tip - 1, tip);
+  }
+  // Outer fan arc
+  for (let i = 0; i < feathers - 1; i++) {
+    addEdge(edgeSet, fr + 1 + i, fr + 2 + i);
+  }
+
+  // Simple legs
+  addPoly(verts, edgeSet, [
+    { x: -bodyR * 0.25, y: -bodyR * 0.55, z: 0 },
+    { x: -bodyR * 0.2, y: -bodyR * 0.95, z: bodyR * 0.1 },
+    { x: -bodyR * 0.35, y: -bodyR * 0.95, z: -bodyR * 0.05 }
+  ], false);
+  addPoly(verts, edgeSet, [
+    { x: bodyR * 0.25, y: -bodyR * 0.55, z: 0 },
+    { x: bodyR * 0.2, y: -bodyR * 0.95, z: bodyR * 0.1 },
+    { x: bodyR * 0.35, y: -bodyR * 0.95, z: -bodyR * 0.05 }
+  ], false);
+
+  const wire = finalizeWire(verts, edgeSet);
+  wire.motif = 'turkey';
+  return wire;
 }
 
 /** Gift box cube + cross ribbon. */
@@ -173,17 +326,33 @@ export function makePresentWire(baseR) {
 }
 
 export function makeSeasonalAsteroidWire(baseR, skin = activeSkin) {
-  if (skin === 'thanksgiving') return makePumpkinWire(baseR);
-  if (skin === 'christmas') return makePresentWire(baseR);
+  if (skin === 'thanksgiving') {
+    // Mix pumpkins (majority) with turkeys.
+    const wire = rand(0, 1) < 0.62 ? makePumpkinWire(baseR) : makeTurkeyWire(baseR);
+    return wire;
+  }
+  if (skin === 'christmas') {
+    const wire = makePresentWire(baseR);
+    wire.motif = 'present';
+    return wire;
+  }
   return null;
 }
 
-export function seasonalAsteroidTint(kindRgb, skin = activeSkin) {
+export function seasonalAsteroidTint(kindRgb, skin = activeSkin, motif) {
   if (skin === 'thanksgiving') {
+    if (motif === 'turkey') {
+      return [
+        Math.min(255, Math.floor(kindRgb[0] * 0.25 + 165)),
+        Math.min(255, Math.floor(kindRgb[1] * 0.3 + 95)),
+        Math.min(255, Math.floor(kindRgb[2] * 0.25 + 45))
+      ];
+    }
+    // Pumpkin lantern orange
     return [
-      Math.min(255, Math.floor(kindRgb[0] * 0.35 + 220)),
-      Math.min(255, Math.floor(kindRgb[1] * 0.4 + 110)),
-      Math.min(255, Math.floor(kindRgb[2] * 0.25 + 35))
+      Math.min(255, Math.floor(kindRgb[0] * 0.3 + 230)),
+      Math.min(255, Math.floor(kindRgb[1] * 0.35 + 125)),
+      Math.min(255, Math.floor(kindRgb[2] * 0.2 + 30))
     ];
   }
   if (skin === 'christmas') {

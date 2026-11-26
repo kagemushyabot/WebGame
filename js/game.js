@@ -1212,7 +1212,7 @@ function drawAsteroid(a) {
   const projected = projectAsteroid(a);
   if (projected.every(p => !p)) return;
   fillAsteroidOcclusion(projected);
-  const rgb = seasonalAsteroidTint(kindColor(a));
+  const rgb = seasonalAsteroidTint(kindColor(a), undefined, a.wire?.motif);
   const drawRgb = a.kind === 'balloon'
     ? rgb.map(c => Math.min(255, Math.floor(c * (0.88 + 0.12 * Math.sin(frame * 0.09 + a.hits)))))
     : rgb;
@@ -1406,7 +1406,7 @@ goHiScoreEl.textContent = getHiScore();
   if (!el) return;
   const skin = getActiveSkin();
   if (skin === 'thanksgiving') {
-    el.textContent = 'Thanksgiving special: pumpkin asteroids (limited time)';
+    el.textContent = 'Thanksgiving special: jack-o-lanterns & turkeys (limited time)';
   } else if (skin === 'christmas') {
     el.textContent = 'Christmas special: gift asteroids + friendly Santa sleigh';
   } else {
