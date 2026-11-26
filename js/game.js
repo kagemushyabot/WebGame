@@ -148,7 +148,9 @@ let lastLoopAt = 0;
 /** Virtual joystick: deflection → angular velocity (rad/s at full tilt). */
 const LOOK_JOY_MAX_YAW = 0.72;
 const LOOK_JOY_MAX_PITCH = 0.5;
-const LOOK_JOY_DEAD = 10;
+/** Finger travel (px) from touch origin before a LOOK press counts as aim drag (not warp tap). */
+const LOOK_JOY_DEAD = 14;
+const LOOK_WARP_TAP_MS = 420;
 let warpFx = { t: 0, duration: 48 };
 
 let ship = newShip();
@@ -235,6 +237,7 @@ function lookPadMetrics() {
 }
 
 function updateLookJoystick(clientX, clientY) {
+  if (!lookPtr) return;
   const { cx, cy, radius } = lookPadMetrics();
   let ox = clientX - cx;
   let oy = clientY - cy;
@@ -243,7 +246,10 @@ function updateLookJoystick(clientX, clientY) {
     ox = (ox / dist) * radius;
     oy = (oy / dist) * radius;
   }
-  if (dist > LOOK_JOY_DEAD) lookPtr.moved = true;
+  // Warp vs aim: use travel from finger-down point, not distance from pad center
+  // (edge taps used to mark moved=true immediately and skip warp).
+  const travel = Math.hypot(clientX - lookPtr.startX, clientY - lookPtr.startY);
+  if (travel > LOOK_JOY_DEAD) lookPtr.moved = true;
   lookPtr.yawRate = (ox / radius) * LOOK_JOY_MAX_YAW;
   lookPtr.pitchRate = (oy / radius) * LOOK_JOY_MAX_PITCH;
   lookPtr.knobX = ox;
@@ -261,9 +267,12 @@ function beginLook(clientX, clientY, pointerId) {
   if (state !== 'PLAYING') return;
   lookPtr = {
     id: pointerId,
+    startX: clientX,
+    startY: clientY,
     yawRate: 0,
     pitchRate: 0,
     moved: false,
+    ended: false,
     t0: Date.now()
   };
   padLook.classList.add('active');
@@ -276,11 +285,13 @@ function moveLook(clientX, clientY, pointerId) {
 }
 
 function endLook(pointerId) {
-  if (!lookPtr || lookPtr.id !== pointerId) return;
-  if (!lookPtr.moved && Date.now() - lookPtr.t0 < 320) tryHyperspace();
+  if (!lookPtr || lookPtr.id !== pointerId || lookPtr.ended) return;
+  lookPtr.ended = true;
+  const tap = !lookPtr.moved && Date.now() - lookPtr.t0 < LOOK_WARP_TAP_MS;
   lookPtr = null;
   padLook.classList.remove('active');
   resetLookPadVisual();
+  if (tap) tryHyperspace();
 }
 
 function applyLookJoystick(dt) {
@@ -312,7 +323,7 @@ function setupTouchPads() {
     moveLook(e.clientX, e.clientY, e.pointerId);
   }, { passive: false });
   padLook.addEventListener('lostpointercapture', e => {
-    if (lookPtr && lookPtr.id === e.pointerId) endLook(e.pointerId);
+    endLook(e.pointerId);
   });
   const endLookPointer = e => {
     endLook(e.pointerId);
