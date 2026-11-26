@@ -17,28 +17,37 @@
       <div class="stat">LIVES<b id="lives">3</b></div>
     </div>
     <div class="topbar">
-      <button class="icon-btn" id="btnRecenter" title="照準をリセット" aria-label="照準をリセット">↻</button>
-      <button class="icon-btn" id="btnMute" title="音声のオン/オフ" aria-label="音声のオン/オフ">🔊</button>
+      <button class="icon-btn" id="btnRecenter" title="照準リセット" aria-label="照準リセット">↻</button>
+      <button class="icon-btn" id="btnMute" title="ミュート" aria-label="ミュート">🔊</button>
+      <button class="icon-btn" id="btnQuit" title="終了 (Esc)" aria-label="終了">✕</button>
     </div>
-  <div class="controls-bar">
-      <button type="button" class="control-btn" id="btnThrust" aria-label="スラスト">▲</button>
-      <button type="button" class="control-btn" id="btnHyperspace" aria-label="ハイパースペース">✦</button>
+
+    <div class="touch-pad touch-pad--look" id="padLook" aria-label="ドラッグで向き・タップでワープ">
+      <span class="touch-pad__ring"></span>
+      <span class="touch-pad__label">LOOK</span>
+      <span class="touch-pad__hint">tap warp</span>
     </div>
-    <div id="tap-hint">TAP to FIRE</div>
+
+    <button type="button" class="touch-pad touch-pad--fire" id="padFire" aria-label="発射">
+      <span class="touch-pad__ring"></span>
+      <span class="touch-pad__label">FIRE</span>
+    </button>
+
     <div id="levelFlash" class="level-flash hidden" aria-live="polite"></div>
+    <div id="pauseHint" class="pause-hint hidden">PAUSED — Esc で終了</div>
   </div>
 
   <div id="startScreen" class="panel open">
     <div class="card">
       <h1>ASTEROIDS 3D</h1>
-      <p>ジャイロで自機を向ける<br>タップで発射・▲長押しで前進</p>
-      <div class="hint">PC: マウスで向き、クリックで発射、Wで前進、H/Shiftでハイパースペース</div>
+      <p>コックピットから宇宙を見渡す<br>左下ドラッグで回転・同位置タップでワープ</p>
+      <div class="hint">右下タップで発射 · Esc / ✕ で終了 · 🔇 ミュート</div>
       <div class="difficulty">
         <label><input type="radio" name="diff" value="easy"> Easy</label>
         <label><input type="radio" name="diff" value="normal" checked> Normal</label>
         <label><input type="radio" name="diff" value="hard"> Hard</label>
       </div>
-      <button class="start" id="btnStart">TAP TO START</button>
+      <button class="start" id="btnStart">START</button>
     </div>
   </div>
 

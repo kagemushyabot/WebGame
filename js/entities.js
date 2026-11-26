@@ -35,21 +35,17 @@ export const SHIP_MODEL = SHIP_RAW.map(v => ({
   x: v.x * MS, y: v.y * MS, z: v.z * MS
 }));
 
+/** Minimal rear-outline wire (cockpit HUD accent, not full mesh). */
 export const SHIP_EDGES = [
-  [0, 1], [0, 2], [1, 2], [1, 5], [2, 5], [1, 3], [2, 4], [3, 5], [4, 5],
-  [3, 6], [4, 7], [5, 8], [6, 8], [7, 8], [6, 9], [7, 10], [8, 11], [8, 22],
-  [9, 11], [10, 11], [9, 20], [10, 21], [20, 11], [21, 11],
-  [9, 13], [10, 14], [9, 12], [10, 12], [12, 18], [12, 19], [18, 17], [19, 16],
-  [13, 15], [14, 16], [17, 15], [18, 16], [17, 18], [15, 12], [16, 12],
-  [0, 8], [3, 6], [4, 7], [6, 13], [7, 14], [11, 22], [9, 10], [13, 17], [14, 18],
-  [0, 22], [1, 6], [2, 7], [20, 22], [21, 22]
+  [0, 1], [0, 2], [1, 3], [2, 4], [3, 6], [4, 7], [6, 9], [7, 10],
+  [9, 11], [10, 11], [9, 13], [10, 14], [13, 15], [14, 16], [12, 18], [12, 19]
 ];
 
 /** Wireframe UFO: flat saucer */
 export const UFO_VERTS = [];
 export const UFO_EDGES = [];
 (function buildUfoWire() {
-  const segs = 12;
+  const segs = 6;
   const r1 = 13 * MS, r2 = 8 * MS, h = 3.5 * MS;
   for (let i = 0; i < segs; i++) {
     const a = (2 * Math.PI * i) / segs;
@@ -112,19 +108,6 @@ function makeRockWire(baseR) {
     addEdge(edgeSet, a, b);
     addEdge(edgeSet, b, c);
     addEdge(edgeSet, c, a);
-    const mx = (verts[a].x + verts[b].x + verts[c].x) / 3;
-    const my = (verts[a].y + verts[b].y + verts[c].y) / 3;
-    const mz = (verts[a].z + verts[b].z + verts[c].z) / 3;
-    const jitter = baseR * 0.06;
-    const ci = verts.length;
-    verts.push({
-      x: mx + rand(-jitter, jitter),
-      y: my + rand(-jitter, jitter),
-      z: mz + rand(-jitter, jitter)
-    });
-    addEdge(edgeSet, a, ci);
-    addEdge(edgeSet, b, ci);
-    addEdge(edgeSet, c, ci);
   }
 
   const edges = [...edgeSet].map(k => k.split(',').map(Number));
@@ -153,6 +136,13 @@ export function spawnAsteroid(size, speedMul, ox, oy, oz, vx, vy, vz) {
   if (vx === undefined) vx = rand(-1, 1) * (0.12 + size * 0.06) * drift;
   if (vy === undefined) vy = rand(-0.2, 0.2) * size * drift;
   if (vz === undefined) vz = rand(-1, 1) * (0.12 + size * 0.06) * drift;
+  if (ox === undefined) {
+    const d = dist3(x, y, z, 0, 0, 0) || 1;
+    const pull = 0.035 * speedMul;
+    vx += (-x / d) * pull;
+    vy += (-y / d) * pull * 0.4;
+    vz += (-z / d) * pull;
+  }
   const baseR = size * WORLD.astRadiusPerSize;
   const wire = makeRockWire(baseR);
   return {

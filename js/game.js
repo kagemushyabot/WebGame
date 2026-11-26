@@ -1,12 +1,13 @@
 import { audio } from './audio.js';
 import {
-  clamp, rand, dist3, cross, normalize, getForward, rotatePoint, rotateAsteroidPoint
+  clamp, rand, dist3, cross, normalize, getForward, rotateAsteroidPoint
 } from './math3d.js';
 import {
-  DIFFICULTY, SHIP_MODEL, SHIP_EDGES, UFO_VERTS, UFO_EDGES,
+  DIFFICULTY, UFO_VERTS, UFO_EDGES,
   newShip, spawnAsteroid, splitAsteroid, spawnUfo
 } from './entities.js';
 import { WORLD } from './world.js';
+import { applyWindshieldClip, drawCockpitOverlay } from './cockpit.js';
 
 const HI_SCORE_KEY = 'asteroids3d_hi';
 
@@ -23,9 +24,11 @@ const btnStart = document.getElementById('btnStart');
 const btnRestart = document.getElementById('btnRestart');
 const btnRecenter = document.getElementById('btnRecenter');
 const btnMute = document.getElementById('btnMute');
-const btnThrust = document.getElementById('btnThrust');
-const btnHyperspace = document.getElementById('btnHyperspace');
+const btnQuit = document.getElementById('btnQuit');
+const padLook = document.getElementById('padLook');
+const padFire = document.getElementById('padFire');
 const levelFlash = document.getElementById('levelFlash');
+const pauseHint = document.getElementById('pauseHint');
 
 let width, height, dpr;
 let cxCanvas, cyCanvas;
@@ -67,27 +70,19 @@ function requestIOS() {
 }
 window.addEventListener('deviceorientation', e => { if (e.beta != null) onDeviceOrientation(e); });
 
-let mouseYaw = 0, mousePitch = 0;
-window.addEventListener('mousemove', e => {
-  if (state !== 'PLAYING') return;
-  const mx = (e.clientX / window.innerWidth - 0.5) * 2;
-  const my = (e.clientY / window.innerHeight - 0.5) * 2;
-  mouseYaw = mx * 0.8;
-  mousePitch = -my * 0.6;
-});
+let lookPtr = null;
+let warpFx = { t: 0, duration: 48 };
 
 let ship = newShip();
 let camX = 0, camY = 0, camZ = 0;
 let camRight = [1, 0, 0], camUp = [0, 1, 0], camForward = [0, 0, -1];
 
 function updateCamera() {
-  const yaw = ship.yaw + mouseYaw;
-  const pitch = clamp(ship.pitch + mousePitch, -1.2, 1.2);
-  const f = getForward(yaw, pitch);
-  const dist = WORLD.camDist;
-  camX = -f[0] * dist;
-  camY = -f[1] * dist + 12 * WORLD.modelScale;
-  camZ = -f[2] * dist;
+  const pitch = clamp(ship.pitch, -1.2, 1.2);
+  const f = getForward(ship.yaw, pitch);
+  camX = 0;
+  camY = 0;
+  camZ = 0;
   camForward = f;
   const worldUp = [0, 1, 0];
   camRight = normalize(cross(camForward, worldUp));
@@ -114,14 +109,8 @@ let frame = 0;
 let invulnUntil = 0;
 let fireCooldown = 0;
 let hyperspaceCooldown = 0;
-let thrustKeyDown = false;
-let thrustTouchDown = false;
 let starsDrawOrder = [];
 let starsSortFrame = -999;
-
-function isThrusting() {
-  return thrustKeyDown || thrustTouchDown || keys['KeyW'] || keys['ArrowUp'];
-}
 
 function getDiff() {
   return DIFFICULTY[difficulty] || DIFFICULTY.normal;
@@ -143,48 +132,89 @@ function saveHiScore() {
 
 function keydown(e) {
   keys[e.code] = true;
+  if (e.code === 'Escape') {
+    if (state === 'PLAYING') exitToMenu();
+    return;
+  }
   if (state === 'START' && (e.code === 'Enter' || e.code === 'Space')) { startGame(); return; }
   if (state === 'GAMEOVER' && e.code === 'Enter') { resetGame(); return; }
-  if (e.code === 'KeyW' || e.code === 'ArrowUp') thrustKeyDown = true;
+  if (state === 'PLAYING' && e.code === 'Space') shoot();
   if (state === 'PLAYING' && (e.code === 'KeyH' || e.code === 'ShiftLeft' || e.code === 'ShiftRight')) {
     tryHyperspace();
   }
 }
 function keyup(e) {
   keys[e.code] = false;
-  if (e.code === 'KeyW' || e.code === 'ArrowUp') thrustKeyDown = false;
 }
 window.addEventListener('keydown', keydown);
 window.addEventListener('keyup', keyup);
 
-function handlePointerDown(e) {
-  if (state !== 'PLAYING') return;
-  if (e.target.closest('button')) return;
-  shoot();
+function setupTouchPads() {
+  if (!padLook) return;
+  padLook.addEventListener('pointerdown', e => {
+    if (state !== 'PLAYING') return;
+    e.preventDefault();
+    padLook.setPointerCapture(e.pointerId);
+    lookPtr = {
+      id: e.pointerId,
+      sx: e.clientX,
+      sy: e.clientY,
+      yaw0: ship.yaw,
+      pitch0: ship.pitch,
+      moved: false,
+      t0: Date.now()
+    };
+    padLook.classList.add('active');
+  });
+  padLook.addEventListener('pointermove', e => {
+    if (!lookPtr || lookPtr.id !== e.pointerId || state !== 'PLAYING') return;
+    const dx = e.clientX - lookPtr.sx;
+    const dy = e.clientY - lookPtr.sy;
+    if (Math.abs(dx) + Math.abs(dy) > 8) lookPtr.moved = true;
+    ship.yaw = lookPtr.yaw0 + dx * 0.005;
+    ship.pitch = clamp(lookPtr.pitch0 + dy * 0.004, -1.2, 1.2);
+  });
+  const endLook = e => {
+    if (!lookPtr || lookPtr.id !== e.pointerId) return;
+    if (!lookPtr.moved && Date.now() - lookPtr.t0 < 320) tryHyperspace();
+    lookPtr = null;
+    padLook.classList.remove('active');
+    try { padLook.releasePointerCapture(e.pointerId); } catch { /* noop */ }
+  };
+  padLook.addEventListener('pointerup', endLook);
+  padLook.addEventListener('pointercancel', endLook);
 }
-canvas.addEventListener('touchstart', e => { e.preventDefault(); handlePointerDown(e); }, { passive: false });
-canvas.addEventListener('mousedown', handlePointerDown);
 
-function bindHoldButton(btn, onDown, onUp) {
-  if (!btn) return;
-  const down = e => { e.preventDefault(); onDown(); btn.classList.add('active'); };
-  const up = () => { onUp(); btn.classList.remove('active'); };
-  btn.addEventListener('pointerdown', down);
-  btn.addEventListener('pointerup', up);
-  btn.addEventListener('pointerleave', up);
-  btn.addEventListener('pointercancel', up);
+function setupFirePad() {
+  if (!padFire) return;
+  const fire = e => {
+    if (state !== 'PLAYING') return;
+    e.preventDefault();
+    shoot();
+    padFire.classList.add('active');
+    setTimeout(() => padFire.classList.remove('active'), 80);
+  };
+  padFire.addEventListener('pointerdown', fire);
+  padFire.addEventListener('click', e => e.preventDefault());
 }
-bindHoldButton(btnThrust, () => { thrustTouchDown = true; }, () => { thrustTouchDown = false; });
-btnHyperspace?.addEventListener('click', e => {
-  e.preventDefault();
-  tryHyperspace();
-});
+setupTouchPads();
+setupFirePad();
+
+function exitToMenu() {
+  if (state !== 'PLAYING') return;
+  state = 'START';
+  audio.playThrustStop();
+  pauseHint?.classList.remove('hidden');
+  setTimeout(() => pauseHint?.classList.add('hidden'), 1400);
+  startScreen.classList.add('open');
+}
 
 btnRecenter.addEventListener('click', () => {
   if (gyroActive) { baseBeta = beta; baseGamma = gamma; baselineCaptured = true; }
-  mouseYaw = 0;
-  mousePitch = 0;
+  ship.yaw = 0;
+  ship.pitch = 0;
 });
+btnQuit?.addEventListener('click', () => exitToMenu());
 btnMute.addEventListener('click', () => {
   audio.setMute(!audio.muted);
   btnMute.textContent = audio.muted ? '🔇' : '🔊';
@@ -263,9 +293,9 @@ function startGame() {
   baseBeta = 0;
   baseGamma = 0;
   baselineCaptured = false;
-  mouseYaw = 0;
-  mousePitch = 0;
-  requestIOS();
+  ship.yaw = 0;
+  ship.pitch = 0;
+  pauseHint?.classList.add('hidden');
   initLevel(false);
   frame = 0;
   loop();
@@ -282,14 +312,21 @@ function resetGame() { startGame(); }
 
 function shoot() {
   if (fireCooldown > 0 || ship.dead) return;
-  const f = getForward(ship.yaw, ship.pitch);
+  updateCamera();
+  const f = camForward;
+  const up = camUp;
   const spd = WORLD.bulletSpeed;
-  const m = ship.radius + 3 * WORLD.modelScale;
+  const ms = WORLD.modelScale;
+  const fwd = 5 * ms;
+  const belowWin = 26 * ms;
+  const sx = f[0] * fwd + up[0] * belowWin;
+  const sy = f[1] * fwd + up[1] * belowWin;
+  const sz = f[2] * fwd + up[2] * belowWin;
   bullets.push({
-    x: f[0] * m, y: f[1] * m, z: f[2] * m,
+    x: sx, y: sy, z: sz,
     vx: f[0] * spd, vy: f[1] * spd, vz: f[2] * spd,
     life: WORLD.bulletLife,
-    px: f[0] * m, py: f[1] * m, pz: f[2] * m
+    px: sx, py: sy, pz: sz
   });
   fireCooldown = WORLD.fireCooldown;
   audio.playFire();
@@ -298,7 +335,8 @@ function shoot() {
 function tryHyperspace() {
   if (state !== 'PLAYING' || ship.dead || hyperspaceCooldown > 0) return;
   hyperspaceCooldown = 180;
-  if (btnHyperspace) btnHyperspace.disabled = true;
+  if (padLook) padLook.classList.add('warp-cool');
+  triggerWarpFx();
   const diff = getDiff();
   if (Math.random() < diff.hazardChance) {
     audio.playHyperspace();
@@ -324,22 +362,14 @@ function tryHyperspace() {
     for (const a of asteroids) { a.x += ox; a.y += oy; a.z += oz; }
     for (const u of ufos) { u.x += ox; u.y += oy; u.z += oz; }
   }
-  ship.speed = 0;
   invulnUntil = Date.now() + 1600;
   addParticle(0, 0, 0, '#3c78ff', 24, 6);
+  addParticle(0, 0, 0, '#aaddff', 36, 9);
   audio.playHyperspace();
 }
 
-function updateShip() {
-  const diff = getDiff();
-  const acc = diff.acc, friction = 0.982, maxSpeed = diff.maxSpeed;
-  if (isThrusting()) {
-    ship.speed = Math.min(ship.speed + acc, maxSpeed);
-    audio.playThrustStart();
-  } else {
-    ship.speed = Math.max(ship.speed - acc * 1.5, 0);
-    audio.playThrustStop();
-  }
+function triggerWarpFx() {
+  warpFx.t = warpFx.duration;
 }
 
 function applyGyroToShip() {
@@ -382,30 +412,28 @@ function updateUfos() {
 }
 
 function moveEnvironment() {
-  const f = getForward(ship.yaw, ship.pitch);
-  const mv = ship.speed;
   updateUfos();
   for (const a of asteroids) {
-    a.x -= f[0] * mv + a.vx;
-    a.y -= f[1] * mv + a.vy;
-    a.z -= f[2] * mv + a.vz;
+    a.x += a.vx;
+    a.y += a.vy;
+    a.z += a.vz;
     a.angleY += a.angleVelY;
     a.angleX += a.angleVelX;
     if (a.angleVelZ) a.angleZ = (a.angleZ || 0) + a.angleVelZ;
     wrapObj(a);
   }
   for (const u of ufos) {
-    u.x -= f[0] * mv + u.vx;
-    u.y -= f[1] * mv + u.vy;
-    u.z -= f[2] * mv + u.vz;
+    u.x += u.vx;
+    u.y += u.vy;
+    u.z += u.vz;
     wrapObj(u);
   }
   for (let i = bullets.length - 1; i >= 0; i--) {
     const b = bullets[i];
     b.px = b.x; b.py = b.y; b.pz = b.z;
-    b.x -= f[0] * mv + b.vx;
-    b.y -= f[1] * mv + b.vy;
-    b.z -= f[2] * mv + b.vz;
+    b.x += b.vx;
+    b.y += b.vy;
+    b.z += b.vz;
     b.life--;
     wrapObj(b);
     if (b.life <= 0) bullets.splice(i, 1);
@@ -413,27 +441,27 @@ function moveEnvironment() {
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     const b = enemyBullets[i];
     b.px = b.x; b.py = b.y; b.pz = b.z;
-    b.x -= f[0] * mv + b.vx;
-    b.y -= f[1] * mv + b.vy;
-    b.z -= f[2] * mv + b.vz;
+    b.x += b.vx;
+    b.y += b.vy;
+    b.z += b.vz;
     b.life--;
     wrapObj(b);
     if (b.life <= 0) enemyBullets.splice(i, 1);
   }
   for (const p of particles) {
-    p.x -= f[0] * mv + p.vx;
-    p.y -= f[1] * mv + p.vy;
-    p.z -= f[2] * mv + p.vz;
+    p.x += p.vx;
+    p.y += p.vy;
+    p.z += p.vz;
     p.life -= 0.04;
   }
   for (let i = particles.length - 1; i >= 0; i--) {
     if (particles[i].life <= 0) particles.splice(i, 1);
   }
-    const sb = 520;
   for (const s of stars) {
-    s.x -= f[0] * mv * 0.6;
-    s.y -= f[1] * mv * 0.6;
-    s.z -= f[2] * mv * 0.6;
+    s.x += s.vx || 0;
+    s.y += s.vy || 0;
+    s.z += s.vz || 0;
+    const sb = 520;
     if (s.x < -sb) s.x += sb * 2;
     if (s.x > sb) s.x -= sb * 2;
     if (s.y < -sb) s.y += sb * 2;
@@ -557,23 +585,6 @@ function drawStarfield() {
   }
 }
 
-function drawVolumeHint(projected, rgbaCore, rgbaEdge) {
-  const pts = projected.filter(Boolean);
-  if (!pts.length) return;
-  let sx = 0, sy = 0, sc = 0;
-  for (const p of pts) { sx += p.sx; sy += p.sy; sc += p.scale; }
-  const n = pts.length;
-  sx /= n; sy /= n;
-  const r = 6 + 5 * (sc / n);
-  const g = ctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-  g.addColorStop(0, rgbaCore);
-  g.addColorStop(1, rgbaEdge);
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(sx, sy, r, 0, Math.PI * 2);
-  ctx.fill();
-}
-
 function drawWireModel3D(projected, edges, rgb) {
   if (projected.every(p => !p)) return;
   ctx.lineCap = 'round';
@@ -594,53 +605,39 @@ function drawWireModel3D(projected, edges, rgb) {
 
 function drawViewportHud() {
   const x = cxCanvas, y = cyCanvas;
-  ctx.strokeStyle = 'rgba(140,175,220,0.28)';
+  ctx.strokeStyle = 'rgba(140,175,220,0.22)';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(x, y, 12, 0, Math.PI * 2);
-  ctx.moveTo(x - 16, y); ctx.lineTo(x - 7, y);
-  ctx.moveTo(x + 7, y); ctx.lineTo(x + 16, y);
-  ctx.moveTo(x, y - 16); ctx.lineTo(x, y - 7);
-  ctx.moveTo(x, y + 7); ctx.lineTo(x, y + 16);
+  ctx.arc(x, y, 10, 0, Math.PI * 2);
+  ctx.moveTo(x - 14, y); ctx.lineTo(x - 6, y);
+  ctx.moveTo(x + 6, y); ctx.lineTo(x + 14, y);
+  ctx.moveTo(x, y - 14); ctx.lineTo(x, y - 6);
+  ctx.moveTo(x, y + 6); ctx.lineTo(x, y + 14);
   ctx.stroke();
 }
 
-function drawShip() {
-  if (!ship || ship.dead) return;
-  if (Date.now() < invulnUntil && Math.floor(Date.now() / 80) % 2 === 0) return;
-
-  const projected = [];
-  for (const v of SHIP_MODEL) {
-    const rp = rotatePoint(v.x, v.y, v.z, ship.yaw, ship.pitch, 0, 0, 0);
-    projected.push(project(rp.x, rp.y, rp.z));
+function drawWarpEffect() {
+  if (warpFx.t <= 0) return;
+  const w = width / dpr, h = height / dpr;
+  const a = warpFx.t / warpFx.duration;
+  ctx.fillStyle = `rgba(160, 210, 255, ${0.32 * a})`;
+  ctx.fillRect(0, 0, w, h);
+  ctx.lineWidth = 1.2;
+  for (let i = 0; i < 28; i++) {
+    const ang = (i / 28) * Math.PI * 2 + frame * 0.15;
+    const len = Math.max(w, h) * (1.1 - a * 0.3);
+    ctx.strokeStyle = `rgba(100, 190, 255, ${0.55 * a})`;
+    ctx.beginPath();
+    ctx.moveTo(cxCanvas, cyCanvas);
+    ctx.lineTo(cxCanvas + Math.cos(ang) * len, cyCanvas + Math.sin(ang) * len);
+    ctx.stroke();
   }
-  if (projected.every(p => !p)) return;
-
-  drawVolumeHint(projected, 'rgba(70,100,160,0.22)', 'rgba(20,30,50,0)');
-  drawWireModel3D(projected, SHIP_EDGES, [180, 210, 255]);
-
-  if (isThrusting() && ship.speed > 0.15) {
-    const ms = WORLD.modelScale;
-    const fl = (8 + Math.random() * 6) * ms;
-    const nz = (7 + fl);
-    const f1 = rotatePoint(0, -7 * ms, nz, ship.yaw, ship.pitch, 0, 0, 0);
-    const f2 = rotatePoint(-8 * ms, -10 * ms, nz - 2 * ms, ship.yaw, ship.pitch, 0, 0, 0);
-    const f3 = rotatePoint(8 * ms, -10 * ms, nz - 2 * ms, ship.yaw, ship.pitch, 0, 0, 0);
-    const pf1 = project(f1.x, f1.y, f1.z);
-    const pf2 = project(f2.x, f2.y, f2.z);
-    const pf3 = project(f3.x, f3.y, f3.z);
-    if (pf1 && pf2 && pf3) {
-      const grad = ctx.createLinearGradient(0, 0, pf1.sx, pf1.sy);
-      grad.addColorStop(0, 'rgba(255,90,20,0.9)');
-      grad.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.moveTo(pf2.sx, pf2.sy);
-      ctx.lineTo(pf1.sx, pf1.sy);
-      ctx.lineTo(pf3.sx, pf3.sy);
-      ctx.fill();
-    }
-  }
+  ctx.strokeStyle = `rgba(255, 255, 255, ${0.7 * a})`;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(cxCanvas, cyCanvas, 30 + (1 - a) * 120, 0, Math.PI * 2);
+  ctx.stroke();
+  warpFx.t--;
 }
 
 function rotateRockLocal(x, y, z, ay, ax, az) {
@@ -655,21 +652,76 @@ function rotateRockLocal(x, y, z, ay, ax, az) {
   return rotateAsteroidPoint(x1, y1, z1, ay, ax, 0, 0, 0);
 }
 
-function drawAsteroid(a) {
+function projectAsteroid(a) {
   const projected = [];
   const az = a.angleZ || 0;
   for (const v of a.wire.verts) {
     const lr = rotateRockLocal(v.x, v.y, v.z, a.angleY, a.angleX, az);
-    const rp = { x: lr.x + a.x, y: lr.y + a.y, z: lr.z + a.z };
-    projected.push(project(rp.x, rp.y, rp.z));
+    const wp = { x: lr.x + a.x, y: lr.y + a.y, z: lr.z + a.z };
+    projected.push(project(wp.x, wp.y, wp.z));
   }
-  drawVolumeHint(projected, 'rgba(45,60,40,0.35)', 'rgba(10,15,10,0)');
+  return projected;
+}
+
+function asteroidViewDepth(a) {
+  const p = project(a.x, a.y, a.z);
+  return p ? p.z : 0;
+}
+
+/** 2D convex hull for screen-space occlusion (Andrew's monotone chain). */
+function convexHull2D(projected) {
+  const pts = projected.filter(Boolean).map(p => ({ x: p.sx, y: p.sy }));
+  if (pts.length < 3) return pts;
+  pts.sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o, p, q) => (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  const lower = [];
+  for (const p of pts) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) lower.pop();
+    lower.push(p);
+  }
+  const upper = [];
+  for (let i = pts.length - 1; i >= 0; i--) {
+    const p = pts[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) upper.pop();
+    upper.push(p);
+  }
+  upper.pop();
+  lower.pop();
+  return lower.concat(upper);
+}
+
+function fillAsteroidOcclusion(projected) {
+  const vis = projected.filter(Boolean);
+  if (vis.length < 3) return;
+  const hull = convexHull2D(projected);
+  if (hull.length < 3) return;
+  const avgZ = vis.reduce((s, p) => s + p.z, 0) / vis.length;
+  const t = clamp(1 - avgZ / 480, 0.45, 1);
+  const r = Math.floor(11 + 8 * t);
+  const g = Math.floor(15 + 10 * t);
+  const b = Math.floor(22 + 12 * t);
+  ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.97)`;
+  ctx.beginPath();
+  ctx.moveTo(hull[0].x, hull[0].y);
+  for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawAsteroid(a) {
+  const projected = projectAsteroid(a);
+  if (projected.every(p => !p)) return;
+  fillAsteroidOcclusion(projected);
   drawWireModel3D(projected, a.wire.edges, [120, 195, 105]);
+}
+
+function drawAsteroidsBackToFront() {
+  const sorted = asteroids.slice().sort((a, b) => asteroidViewDepth(b) - asteroidViewDepth(a));
+  for (const a of sorted) drawAsteroid(a);
 }
 
 function drawUfo(u) {
   const projected = UFO_VERTS.map(v => project(v.x + u.x, v.y + u.y, v.z + u.z));
-  drawVolumeHint(projected, 'rgba(60,90,50,0.25)', 'rgba(0,0,0,0)');
   drawWireModel3D(projected, UFO_EDGES, [150, 230, 130]);
 }
 
@@ -725,14 +777,32 @@ function drawParticles() {
 function draw() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   updateCamera();
-  drawStarfield();
-  for (const a of asteroids) drawAsteroid(a);
-  for (const u of ufos) drawUfo(u);
-  drawShip();
-  for (const b of bullets) drawMissile(b, false);
-  for (const b of enemyBullets) drawMissile(b, true);
-  drawParticles();
-  if (state === 'PLAYING') drawViewportHud();
+  const w = width / dpr, h = height / dpr;
+  const cockpitOn = state === 'PLAYING';
+
+  if (cockpitOn) {
+    ctx.fillStyle = '#04060a';
+    ctx.fillRect(0, 0, w, h);
+    ctx.save();
+    applyWindshieldClip(ctx, w, h);
+    drawStarfield();
+    drawAsteroidsBackToFront();
+    for (const u of ufos) drawUfo(u);
+    for (const b of bullets) drawMissile(b, false);
+    for (const b of enemyBullets) drawMissile(b, true);
+    drawParticles();
+    drawWarpEffect();
+    ctx.restore();
+    drawCockpitOverlay(ctx, w, h);
+    drawViewportHud();
+  } else {
+    drawStarfield();
+    drawAsteroidsBackToFront();
+    for (const u of ufos) drawUfo(u);
+    for (const b of bullets) drawMissile(b, false);
+    for (const b of enemyBullets) drawMissile(b, true);
+    drawParticles();
+  }
 }
 
 function loop() {
@@ -741,10 +811,8 @@ function loop() {
   if (fireCooldown > 0) fireCooldown--;
   if (hyperspaceCooldown > 0) {
     hyperspaceCooldown--;
-    if (hyperspaceCooldown === 0 && btnHyperspace) btnHyperspace.disabled = false;
+    if (hyperspaceCooldown === 0 && padLook) padLook.classList.remove('warp-cool');
   }
-  applyGyroToShip();
-  updateShip();
   moveEnvironment();
   checkCollisions();
   nextLevelIfClear();
@@ -755,7 +823,13 @@ function loop() {
 function initStars() {
   stars = [];
   for (let i = 0; i < 110; i++) {
-    stars.push({ x: rand(-520, 520), y: rand(-90, 90), z: rand(-520, 520) });
+    stars.push({
+      x: rand(-520, 520),
+      y: rand(-90, 90),
+      z: rand(-520, 520),
+      vx: 0, vy: 0,
+      vz: rand(-0.08, -0.02)
+    });
   }
 }
 initStars();
